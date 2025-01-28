@@ -49,12 +49,8 @@ class EvDev(nn.Module):
         super().__init__()
         self.linear_ev = nn.Linear(in_feat, ev_rank)
         self.linear_dev = nn.Linear(in_feat, dev_rank)
-        if kR == 1:
-            self.ev_mat = torch.nn.Parameter(nn.Linear(ev_rank, 215).weight)
-            self.dev_mat = torch.nn.Parameter(nn.Linear(dev_rank, 215).weight)
-        else:
-            self.ev_mat = torch.nn.Parameter(torch.tensor(kEvMatrix * 1e-5)[:,:ev_rank])
-            self.dev_mat = torch.nn.Parameter(torch.tensor(kDevMatrix * 1e-5)[:,:dev_rank])
+        self.ev_mat = torch.nn.Parameter(nn.Linear(ev_rank, 215).weight)
+        self.dev_mat = torch.nn.Parameter(nn.Linear(dev_rank, 215).weight)
         self.ev_mat.requires_grad = True
         self.dev_mat.requires_grad = True
 
@@ -115,7 +111,7 @@ class Model(nn.Module):
             nn.Linear(1 * kH * kW, 256),
             nn.ReLU(True),
         )
-        self.evdev_final = EvDev(512, 40, 32)
+        self.evdev_final = EvDev(512, 48, 32)
         self.pi_value_final = PiValueHead(256)
 
     @autocast(device_type=device)

@@ -193,6 +193,8 @@ class Tetris {
 
   const MoveMap& GetPossibleMoveMap() const { return move_map_; }
   const Board& GetBoard() const { return board_; }
+  const int* GetTapSequence() const { return tap_sequence_.data(); }
+  const int GetAdjDelay() const { return adj_delay_; }
 
   int GetLevel() const { return GetLevelByLines(lines_); }
   Level LevelSpeed() const { return GetLevelSpeed(GetLevel()); }

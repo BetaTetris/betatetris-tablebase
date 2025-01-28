@@ -96,6 +96,29 @@ PyObject* GetRewardObj(double reward, double raw_reward) {
   return ret;
 }
 
+// read Python list or NumPy array into std::vector<int>
+std::vector<int> GetArray(PyObject* obj) {
+  std::vector<int> result;
+  if (PyList_Check(obj)) {
+    Py_ssize_t len = PyList_Size(obj);
+    for (Py_ssize_t i = 0; i < len; ++i) {
+      PyObject* item = PyList_GetItem(obj, i);
+      if (!PyLong_Check(item)) throw std::invalid_argument("Not a list of integers");
+      result.push_back(PyLong_AsLong(item));
+    }
+  } else if (PyArray_Check(obj)) {
+    PyArrayObject* array = reinterpret_cast<PyArrayObject*>(obj);
+    if (PyArray_TYPE(array) != NPY_INT) throw std::invalid_argument("Not a list of integers");
+    if (!PyArray_ISCONTIGUOUS(array)) throw std::invalid_argument("Array not contiguous");
+    int* data = static_cast<int*>(PyArray_DATA(array));
+    npy_intp size = PyArray_SIZE(array);
+    result.assign(data, data + size);
+  } else {
+    throw std::invalid_argument("Not an array");
+  }
+  return result;
+}
+
 /// -------- impl --------
 
 void TetrisDealloc(PythonTetris* self) {
@@ -172,37 +195,64 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
     "now_piece", "next_piece", "lines", "board",
 #ifdef NO_ROTATION
     "start_level", "do_tuck", "nnb", "mirror",
+#else
+    "step_reward", "step_reward_level", "tap_sequence", "adj_delay",
 #endif
     nullptr
   };
-  PyObject *now_obj, *next_obj;
+  PyObject *now_obj = nullptr, *next_obj = nullptr, *board_obj = nullptr;
   int lines = 0;
   Board board = Board::Ones;
-  PyObject* board_obj = nullptr;
 #ifdef NO_ROTATION
   int start_level = 0;
   int do_tuck = 1;
   int nnb = 0;
   int mirror = 0;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|iOippp", (char**)kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOiOippp", (char**)kwlist,
         &now_obj, &next_obj, &lines, &board_obj, &start_level, &do_tuck, &nnb, &mirror)) {
     return nullptr;
   }
 #else
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|iO", (char**)kwlist,
-        &now_obj, &next_obj, &lines, &board_obj)) {
+  std::vector<int> tap_sequence;
+  PyObject* tap_sequence_obj = nullptr;
+  int adj_delay = ADJ_DELAY;
+  double step_reward = 200;
+  int step_reward_level = 0;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOiOdiOi", (char**)kwlist,
+        &now_obj, &next_obj, &lines, &board_obj, &step_reward, &step_reward_level, &tap_sequence_obj, &adj_delay)) {
+    return nullptr;
+  }
+  try {
+    if (tap_sequence_obj) {
+      tap_sequence = GetArray(tap_sequence_obj);
+    } else {
+      constexpr TAP_SPEED tap_table;
+      tap_sequence = std::vector<int>(tap_table.data(), tap_table.data() + 10);
+    }
+    if (tap_sequence.size() != 10) throw std::invalid_argument("Length should be 10");
+    for (size_t i = 1; i < tap_sequence.size(); i++) {
+      if (tap_sequence[i] - tap_sequence[i - 1] < 2) throw std::invalid_argument("Invalid tap sequence");
+    }
+  } catch (std::invalid_argument& e) {
+    PyErr_SetString(PyExc_TypeError, e.what());
     return nullptr;
   }
 #endif
   if (!CheckBoard(board, board_obj)) return nullptr;
-  int now_piece = ParsePieceID(now_obj);
-  if (now_piece < 0) return nullptr;
-  int next_piece = ParsePieceID(next_obj);
-  if (next_piece < 0) return nullptr;
+  int now_piece = -1, next_piece = -1;
+  if (now_obj) {
+    now_piece = ParsePieceID(now_obj);
+    if (now_piece < 0) return nullptr;
+    if (next_obj) {
+      next_piece = ParsePieceID(next_obj);
+      if (next_piece < 0) return nullptr;
+    }
+  }
 #ifdef NO_ROTATION
   self->Reset(board, lines, start_level, do_tuck, nnb, mirror, now_piece, next_piece);
 #else
-  self->Reset(board, lines, now_piece, next_piece);
+  self->Reset(board, lines, tap_sequence.data(), adj_delay, now_piece, next_piece);
+  self->SetStepReward(step_reward, step_reward_level);
 #endif
   Py_RETURN_NONE;
 }
