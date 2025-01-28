@@ -1,8 +1,10 @@
 #pragma once
 
+#include <mutex>
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
+#include <unordered_map>
 
 #include "game.h"
 #include "board.h"
@@ -228,6 +230,7 @@ constexpr int Phase1TableGen(
 struct Phase1TableNoTmpl {
   std::vector<TableEntryNoTmpl> initial;
   std::vector<std::vector<TableEntryNoTmpl>> adj;
+  Phase1TableNoTmpl() {}
   Phase1TableNoTmpl(Level level, int R, int adj_frame, const int taps[]) : initial(40) {
     initial.resize(10 * R);
     initial.resize(Phase1TableGen(level, R, taps, 0, 0, Position::Start.y, 9, 2, initial.data()));
@@ -582,15 +585,50 @@ inline PossibleMoves MoveSearch(Level level, int adj_frame, const std::array<Boa
 }
 
 class PrecomputedTableTuple {
-  const PrecomputedTable tables[3];
+  PrecomputedTable tables[kLevels][3];
  public:
-  PrecomputedTableTuple(Level level, int adj_frame, const int taps[]) :
-      tables{{level, 1, adj_frame, taps}, {level, 2, adj_frame, taps}, {level, 4, adj_frame, taps}} {}
-  const PrecomputedTable& operator[](int R) const {
-    switch (R) {
-      case 1: return tables[0];
-      case 2: return tables[1];
-      default: return tables[2];
+  static constexpr int TableIndex(int piece) {
+    switch (piece) {
+      case 0: return 2;
+      case 1: return 2;
+      case 2: return 1;
+      case 3: return 0;
+      case 4: return 1;
+      case 5: return 2;
+      case 6: return 1;
+    }
+    unreachable();
+  }
+
+  PrecomputedTableTuple() {}
+  PrecomputedTableTuple(int adj_frame, const int taps[]) {
+    for (int i = 0; i < kLevels; i++) {
+      Level level = static_cast<Level>(i);
+      tables[i][0] = PrecomputedTable(level, 1, adj_frame, taps);
+      tables[i][1] = PrecomputedTable(level, 2, adj_frame, taps);
+      tables[i][2] = PrecomputedTable(level, 4, adj_frame, taps);
+    }
+  }
+
+  const PrecomputedTable& operator()(Level level, int table_index) const {
+    return tables[static_cast<int>(level)][table_index];
+  }
+};
+
+class PrecomputedTableCache {
+  std::mutex mtx_;
+  std::unordered_map<std::pair<std::array<int, 10>, int>, PrecomputedTableTuple> cache_;
+ public:
+  const PrecomputedTableTuple& operator()(decltype(cache_)::key_type&& key) {
+    std::unique_lock<std::mutex> lck(mtx_);
+    if (auto it = cache_.find(key); it != cache_.end()) {
+      return it->second;
+    } else {
+      lck.unlock();
+      PrecomputedTableTuple table(key.second, key.first.data());
+      lck.lock();
+      it = cache_.emplace(key, std::move(table)).first;
+      return it->second;
     }
   }
 };
@@ -599,7 +637,8 @@ inline PossibleMoves MoveSearch(
     Level level, int adj_frame, const int taps[], const PrecomputedTableTuple& table,
     const Board& b, int piece) {
 #define ONE_CASE(x) \
-    case x: return MoveSearch<Board::NumRotations(x)>(level, adj_frame, taps, table[Board::NumRotations(x)], b.PieceMap<x>());
+    case x: return MoveSearch<Board::NumRotations(x)>( \
+                level, adj_frame, taps, table(level, PrecomputedTableTuple::TableIndex(x)), b.PieceMap<x>());
   DO_PIECE_CASE(piece);
 #undef ONE_CASE
 }

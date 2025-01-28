@@ -135,7 +135,7 @@ if(BUILD_TESTS)
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable_Exclude(googletest)
 
-  file(GLOB TEST_SRC "test/*.cpp" "src/files.cpp" "src/config.cpp")
+  file(GLOB TEST_SRC "test/*.cpp" "src/files.cpp" "src/config.cpp" "src/tetris.cpp")
   add_executable(run-test ${TEST_SRC})
   target_link_libraries(run-test gtest_main zstd tsl::sparse_map tsl::hopscotch_map)
   target_compile_definitions(run-test PRIVATE ${CXX_TEST_DEFS})

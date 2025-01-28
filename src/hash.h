@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 constexpr uint64_t Hash(uint64_t a, uint64_t b) {
   constexpr uint64_t kTable[3] = {0x9e3779b185ebca87, 0xc2b2ae3d27d4eb4f, 0x165667b19e3779f9};
   auto Mix = [&](uint64_t a, uint64_t b) {
@@ -17,3 +19,19 @@ constexpr uint64_t Hash(uint64_t a, uint64_t b) {
   // ret ^= ret >> 32;
   return ret;
 }
+
+template <class U, class V>
+struct std::hash<std::pair<U, V>> {
+  size_t operator()(const std::pair<U, V>& x) const {
+    return Hash(std::hash<U>()(x.first), std::hash<V>()(x.second));
+  }
+};
+
+template <class T, size_t N>
+struct std::hash<std::array<T, N>> {
+  size_t operator()(const std::array<T, N>& x) const {
+    size_t seed = 123;
+    for (const auto& i : x) seed = Hash(seed, std::hash<T>()(i));
+    return seed;
+  }
+};

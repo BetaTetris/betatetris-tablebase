@@ -87,7 +87,6 @@ class Game:
         self.is_normal = True
         self.until_clean = False
         self.prev_soft_done = False
-        self.reset()
 
     def step(self, action, manager=None):
         r, x, y = action // 200, action // 10 % 20, action % 10

@@ -2,13 +2,17 @@
 
 namespace {
 
+TEST_F(SearchTest, Test30Hz) {
+  SetUp();
+  for (auto& board : kTestBoards) {
+    TestSearch<18, Tap30Hz>(board);
+  }
+}
+
 TEST_F(SearchTest, Test30HzSmallAdj) {
   SetUp();
   for (auto& board : kTestBoards) {
-    TestSearch<kLevel18, 4, Tap30Hz>(board);
-    TestSearch<kLevel19, 4, Tap30Hz>(board);
-    TestSearch<kLevel29, 4, Tap30Hz>(board);
-    TestSearch<kLevel39, 4, Tap30Hz>(board);
+    TestSearch<4, Tap30Hz>(board);
   }
 }
 

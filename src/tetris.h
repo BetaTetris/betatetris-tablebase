@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstring>
+#include <unordered_map>
+#include "hash.h"
 #include "game.h"
 #include "move_search.h"
 #include "move_search_noro.h"
@@ -25,6 +27,11 @@ class Tetris {
   MoveMap move_map_;
   int consecutive_fail_;
 
+  std::array<int, 10> tap_sequence_;
+  int adj_delay_;
+  const PrecomputedTableTuple* search_table_;
+  static PrecomputedTableCache search_table_cache_;
+
   // stats
   int run_score_;
   int run_lines_;
@@ -32,7 +39,7 @@ class Tetris {
 
   void CalculateMoves_(bool regenerate) {
     if (regenerate) {
-      moves_ = MoveSearch<ADJ_DELAY, TAP_SPEED>(board_, LevelSpeed(), now_piece_);
+      moves_ = MoveSearch(LevelSpeed(), adj_delay_, tap_sequence_.data(), *search_table_, board_, now_piece_);
       if (moves_.non_adj.empty() && moves_.adj.empty()) {
         game_over_ = true;
         return;
@@ -81,7 +88,12 @@ class Tetris {
   }
 
  public:
-  void Reset(const Board& b, int lines, int now_piece, int next_piece) {
+  Tetris() : tap_sequence_{{2,2,2,2,2,2,2,2,2,2}}, adj_delay_{ADJ_DELAY} {}
+
+  void Reset(const Board& b, int lines, int now_piece, int next_piece, const int tap_sequence[10], int adj_delay) {
+    memcpy(tap_sequence_.data(), tap_sequence, sizeof(tap_sequence_));
+    adj_delay_ = adj_delay;
+    search_table_ = &search_table_cache_({tap_sequence_, adj_delay_});
     int pieces = (lines * 10 + b.Count()) / 4;
     if (pieces * 4 != lines * 10 + (int)b.Count()) throw std::runtime_error("Incorrect lines");
     board_ = b;
@@ -97,6 +109,11 @@ class Tetris {
     run_score_ = 0;
     run_lines_ = 0;
     run_pieces_ = 0;
+  }
+
+  void Reset(const Board& b, int lines, int now_piece, int next_piece) {
+    constexpr TAP_SPEED tap_table;
+    Reset(b, lines, now_piece, next_piece, tap_table.data(), ADJ_DELAY);
   }
 
   bool IsNoAdjMove(const Position& pos) const {
@@ -148,11 +165,13 @@ class Tetris {
   }
 
   FrameSequence GetSequence(const Position& pos) const {
-    return GetFrameSequenceStart<TAP_SPEED>(board_, LevelSpeed(), now_piece_, ADJ_DELAY, pos);
+    // TODO
+    return GetFrameSequenceStart<TAP_SPEED>(board_, LevelSpeed(), now_piece_, adj_delay_, pos);
   }
 
   std::pair<Position, FrameSequence> GetAdjPremove(const Position pos[7]) const {
-    auto [idx, seq] = GetBestAdj<TAP_SPEED>(board_, LevelSpeed(), now_piece_, moves_, ADJ_DELAY, pos);
+    // TODO
+    auto [idx, seq] = GetBestAdj<TAP_SPEED>(board_, LevelSpeed(), now_piece_, moves_, adj_delay_, pos);
     return {moves_.adj[idx].first, seq};
   }
 
