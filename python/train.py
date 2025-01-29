@@ -9,7 +9,7 @@ import numpy as np, torch
 from torch import optim
 from torch.nn import functional as F
 from torch.distributions import Categorical, Normal, kl_divergence
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 
 import labml.lab
 from labml import monit, tracker, logger, experiment
@@ -36,7 +36,7 @@ class Main:
 
         # #### Initialize
         # model for sampling
-        self.model = Model(*c.model_args()).to(device)
+        self.model = Model(*c.model_args()).to(device, memory_format=torch.channels_last)
         self.model_opt = torch.compile(self.model)
 
         # dynamic hyperparams
@@ -46,7 +46,7 @@ class Main:
         self.set_weight_params()
 
         # optimizer
-        self.scaler = GradScaler()
+        self.scaler = GradScaler('cuda')
         self.optimizer = optim.Adam(self.model_opt.parameters(),
                 lr=self.cur_lr, weight_decay=self.cur_reg_l2)
 
@@ -90,7 +90,7 @@ class Main:
                 # get mini batch
                 end = start + self.update_batch_size
                 # train
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
                 loss_mul = self.update_batch_size // self.c.mini_batch_size
                 for t_start in range(start, end, self.c.mini_batch_size):
                     t_end = t_start + self.c.mini_batch_size

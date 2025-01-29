@@ -252,7 +252,7 @@ def generator_process(remote, name, c, game_params, device):
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
     try:
-        model = Model(*c.model_args()).to(device)
+        model = Model(*c.model_args()).to(device, memory_format=torch.channels_last)
         model = torch.compile(model)
         generator = DataGenerator(name, model, c, game_params)
         samples = None

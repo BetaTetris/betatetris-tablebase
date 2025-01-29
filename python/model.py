@@ -14,10 +14,10 @@ class ConvBlock(nn.Module):
     def __init__(self, ch):
         super().__init__()
         self.main = nn.Sequential(
-                nn.Conv2d(ch, ch, 3, padding = 1),
+                nn.Conv2d(ch, ch, 3, padding=1, bias=False),
                 nn.BatchNorm2d(ch),
                 nn.ReLU(True),
-                nn.Conv2d(ch, ch, 3, padding = 1),
+                nn.Conv2d(ch, ch, 3, padding=1, bias=False),
                 nn.BatchNorm2d(ch),
                 )
         self.final = nn.ReLU(True)
@@ -89,14 +89,14 @@ class Model(nn.Module):
         self.main_start = nn.Sequential(*[ConvBlock(channels) for i in range(start_blocks)])
         self.main_end = nn.Sequential(*[ConvBlock(channels) for i in range(end_blocks)])
         self.pi_logits_head = nn.Sequential(
-            nn.Conv2d(channels, 8, 1),
+            nn.Conv2d(channels, 8, 1, bias=False),
             nn.BatchNorm2d(8),
             nn.Flatten(),
             nn.ReLU(True),
             nn.Linear(8 * kH * kW, kR * kH * kW)
         )
         self.evdev_head = nn.Sequential(
-            nn.Conv2d(channels, 2, 1),
+            nn.Conv2d(channels, 2, 1, bias=False),
             nn.BatchNorm2d(2),
             nn.Flatten(),
             nn.ReLU(True),
@@ -104,7 +104,7 @@ class Model(nn.Module):
             nn.ReLU(True),
         )
         self.value_head = nn.Sequential(
-            nn.Conv2d(channels, 1, 1),
+            nn.Conv2d(channels, 1, 1, bias=False),
             nn.BatchNorm2d(1),
             nn.Flatten(),
             nn.ReLU(True),
