@@ -192,9 +192,9 @@ class PythonTetris {
     std::array<int, 2> meta_int;
 #else
     std::array<std::array<std::array<float, 10>, 20>, 6> board;
-    std::array<float, 16> meta;
+    std::array<float, 32> meta;
     std::array<std::array<std::array<float, 10>, 20>, 14> moves;
-    std::array<float, 44> move_meta;
+    std::array<float, 28> move_meta;
     std::array<int, 2> meta_int;
 #endif
   };
@@ -332,10 +332,10 @@ class PythonTetris {
 
   static void GetState(const Tetris& tetris, State& state, int line_reduce = 0, int step_reward_level = 0) {
     // board: shape (6, 20, 10) [board, one, initial_move(4)]
-    // meta: shape (16,) [now_piece(7), next_piece(7), is_adj(1), pad(1)]
+    // meta: shape (32,) [now_piece(7), next_piece(7), is_adj(1), hz(7), adj_delay(6), aggro(3), pad(1)]
     // meta_int: shape (2,) [entry, now_piece]
     // moves: shape (14, 20, 10) [board, one, moves(4), adj_moves(4), initial_move(4)]
-    // move_meta: shape (44,) [speed(4), to_transition(21), (level-18)*0.1, lines*0.01, pieces*0.004, hz(7), adj_delay(6), aggro(3)]
+    // move_meta: shape (28,) [speed(4), to_transition(21), (level-18)*0.1, lines*0.01, pieces*0.004]
     {
       auto byte_board = tetris.GetBoard().ToByteBoard();
       for (int i = 0; i < 20; i++) {
@@ -371,6 +371,42 @@ class PythonTetris {
     int state_lines = lines - line_reduce;
     int state_level = GetLevelByLines(state_lines);
     int state_speed = static_cast<int>(GetLevelSpeed(state_level));
+
+    int tap_4 = tetris.GetTapSequence()[3];
+    int tap_5 = tetris.GetTapSequence()[4];
+    int adj_delay = tetris.GetAdjDelay();
+    if (state_speed == 2 && adj_delay >= 20) adj_delay = 61;
+    if (state_speed == 3 && adj_delay >= 10) adj_delay = 61;
+    if (tap_5 <= 8) { // 30hz
+      state.meta[15] = 1;
+    } else if (tap_5 <= 11) { // 24hz
+      state.meta[16] = 1;
+    } else if (tap_5 <= 13) { // 20hz
+      state.meta[17] = 1;
+    } else if (tap_5 <= 16) { // 15hz
+      state.meta[18] = 1;
+    } else if (tap_4 <= 9) { // slow 5-tap
+      state.meta[19] = 1;
+    } else if (tap_5 <= 21) { // 12hz
+      state.meta[20] = 1;
+    } else { // 10hz
+      state.meta[21] = 1;
+    }
+    if (adj_delay <= 4) {
+      state.meta[22] = 1;
+    } else if (adj_delay <= 19) {
+      state.meta[23] = 1;
+    } else if (adj_delay <= 22) {
+      state.meta[24] = 1;
+    } else if (adj_delay <= 25) {
+      state.meta[25] = 1;
+    } else if (adj_delay <= 32) {
+      state.meta[26] = 1;
+    } else {
+      state.meta[27] = 1;
+    }
+    state.meta[28 + step_reward_level] = 1;
+
     state.meta_int[0] = state_lines / 2;
     state.meta_int[1] = tetris.NowPiece();
 
@@ -393,38 +429,6 @@ class PythonTetris {
     state.move_meta[25] = (state_level - 18) * 0.1;
     state.move_meta[26] = state_lines * 0.01;
     state.move_meta[27] = (tetris.GetPieces() + line_reduce * 10 / 4) * 0.004;
-    int tap_4 = tetris.GetTapSequence()[3];
-    int tap_5 = tetris.GetTapSequence()[4];
-    int adj_delay = tetris.GetAdjDelay();
-    if (tap_5 <= 8) { // 30hz
-      state.move_meta[28] = 1;
-    } else if (tap_5 <= 11) { // 24hz
-      state.move_meta[29] = 1;
-    } else if (tap_5 <= 13) { // 20hz
-      state.move_meta[30] = 1;
-    } else if (tap_5 <= 16) { // 15hz
-      state.move_meta[31] = 1;
-    } else if (tap_4 <= 9) { // slow 5-tap
-      state.move_meta[32] = 1;
-    } else if (tap_5 <= 21) { // 12hz
-      state.move_meta[33] = 1;
-    } else { // 10hz
-      state.move_meta[34] = 1;
-    }
-    if (adj_delay <= 4) {
-      state.move_meta[35] = 1;
-    } else if (adj_delay <= 19) {
-      state.move_meta[36] = 1;
-    } else if (adj_delay <= 22) {
-      state.move_meta[37] = 1;
-    } else if (adj_delay <= 25) {
-      state.move_meta[38] = 1;
-    } else if (adj_delay <= 32) {
-      state.move_meta[39] = 1;
-    } else {
-      state.move_meta[40] = 1;
-    }
-    state.move_meta[41 + step_reward_level] = 1;
   }
 
 

@@ -42,7 +42,7 @@ class Main:
         # dynamic hyperparams
         self.cur_lr = self.c.lr()
         self.cur_reg_l2 = self.c.reg_l2()
-        self.cur_game_params = (0., 0.)
+        self.cur_game_params = (0., 0., 0., 0., 0.)
         self.set_weight_params()
 
         # optimizer
@@ -56,7 +56,7 @@ class Main:
         self.set_game_params(cur_params)
 
     def get_game_params(self):
-        return (self.c.gamma(), self.c.lamda())
+        return (self.c.gamma(), self.c.lamda(), self.c.step_points_progress(), self.c.board_ratio(), self.c.short_ratio())
 
     def set_optim(self, lr, reg_l2):
         if lr == self.cur_lr and reg_l2 == self.cur_reg_l2: return

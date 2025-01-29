@@ -40,8 +40,12 @@ class Configs(BaseConfigs):
     entropy_weight: float = FloatDynamicHyperParam(2.2e-2, range_ = (0, 5e-2))
     reg_l2: float = FloatDynamicHyperParam(0., range_ = (0, 5e-5))
 
+    step_points_progress = FloatDynamicHyperParam(0., range_ = (0, 1))
+    board_ratio = FloatDynamicHyperParam(0., range_ = (0, 1))
+    short_ratio = FloatDynamicHyperParam(0., range_ = (0, 1))
+
     time_limit: int = -1
-    save_interval: int = 1000
+    save_interval: int = 250
     board_file: Optional[str] = None
 
 

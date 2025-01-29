@@ -233,7 +233,8 @@ struct Phase1TableNoTmpl {
   Phase1TableNoTmpl() {}
   Phase1TableNoTmpl(Level level, int R, int adj_frame, const int taps[]) : initial(40) {
     initial.resize(10 * R);
-    initial.resize(Phase1TableGen(level, R, taps, 0, 0, Position::Start.y, 9, 2, initial.data()));
+    int phase_1_taps = adj_frame == 0 ? 0 : 9; // TODO: it is enough for now, but maybe change to a more general scheme?
+    initial.resize(Phase1TableGen(level, R, taps, 0, 0, Position::Start.y, phase_1_taps, std::min(2, phase_1_taps), initial.data()));
     for (auto& i : initial) {
       int frame_start = std::max(adj_frame, taps[i.num_taps]);
       adj.emplace_back(10 * R);

@@ -19,6 +19,7 @@ class DataGenerator:
         self.device = next(self.model.parameters()).device
         self.total_games = 0
         self.total_long_games = 0
+        self.game_params = None
 
         # initialize tensors for observations
         shapes = [*[(self.envs, *i) for i in tetris.Tetris.StateShapes()],
@@ -62,9 +63,11 @@ class DataGenerator:
         self.model.eval()
 
     def set_params(self, game_params):
-        for i in self.workers:
-            i.child.send(('set_param', game_params[:-2]))
-        self.gamma, self.lamda = game_params[-2:]
+        if self.game_params != game_params[2:]:
+            for i in self.workers:
+                i.child.send(('set_param', game_params[2:]))
+            self.game_params = game_params[2:]
+        self.gamma, self.lamda = game_params[:2]
 
     def sample(self, train = True, gpu = False, epoch = 0):
         """### Sample data with current policy"""
