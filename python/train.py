@@ -236,6 +236,7 @@ class Main:
 def claim_experiment(uuid: str):
     from urllib.request import Request, urlopen
     from urllib.parse import urlsplit, urlunsplit
+    time.sleep(2)
     url = labml.lab.get_info()['configs']['web_api']
     scheme, host, _, _, _ = urlsplit(url)
     url = urlunsplit((scheme, host, f'/api/v1/run/{uuid}/claim', '', ''))

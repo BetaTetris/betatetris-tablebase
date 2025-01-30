@@ -7,9 +7,9 @@ from labml.configs import BaseConfigs, FloatDynamicHyperParam
 class Configs(BaseConfigs):
     # #### Configurations
     ## NN
-    start_blocks: int = 4
-    end_blocks: int = 3
-    channels: int = 192
+    start_blocks: int = 8
+    end_blocks: int = 8
+    channels: int = 256
 
     def model_args(self):
         return (self.start_blocks, self.end_blocks, self.channels)
@@ -35,14 +35,14 @@ class Configs(BaseConfigs):
 
     ## loss calculation
     clipping_range: float = 0.2
-    vf_weight: float = FloatDynamicHyperParam(2, range_ = (0, 5))
-    raw_weight: float = FloatDynamicHyperParam(1e-4, range_ = (0, 0.1))
-    entropy_weight: float = FloatDynamicHyperParam(2.2e-2, range_ = (0, 5e-2))
+    vf_weight: float = FloatDynamicHyperParam(1, range_ = (0, 5))
+    raw_weight: float = FloatDynamicHyperParam(0, range_ = (0, 0.1))
+    entropy_weight: float = FloatDynamicHyperParam(1.5e-2, range_ = (0, 5e-2))
     reg_l2: float = FloatDynamicHyperParam(0., range_ = (0, 5e-5))
 
-    step_points_progress = FloatDynamicHyperParam(0., range_ = (0, 1))
-    board_ratio = FloatDynamicHyperParam(0., range_ = (0, 1))
-    short_ratio = FloatDynamicHyperParam(0., range_ = (0, 1))
+    step_points_progress = FloatDynamicHyperParam(0., range_ = (-1, 1))
+    board_ratio = FloatDynamicHyperParam(0., range_ = (-1, 1))
+    short_ratio = FloatDynamicHyperParam(0., range_ = (-1, 1))
 
     time_limit: int = -1
     save_interval: int = 250
@@ -78,10 +78,13 @@ def LoadConfig(with_experiment = True):
         if args[key] is not None:
             conf.__getattribute__(key).set_value(args[key])
     if with_experiment:
-        os.makedirs('logs/{}'.format(args['name']), exist_ok = True)
-        uuid = 1
-        while os.path.exists('logs/{0}/{0}-{1:03d}'.format(args['name'], uuid)):
-            uuid += 1
+        name = args['name']
+        os.makedirs('logs/{}'.format(name), exist_ok = True)
+        mx_uuid = 0
+        for i in os.listdir('logs/{}'.format(name)):
+            if i[:len(name)+1] == '{}-'.format(name):
+                mx_uuid = max(mx_uuid, int(i[len(name)+1:]))
+        uuid = mx_uuid + 1
         experiment.create(name = args['name'], uuid = '{0}-{1:03d}'.format(args['name'], uuid))
         experiment.configs(conf, override_dict)
     else:

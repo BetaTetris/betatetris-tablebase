@@ -65,6 +65,10 @@ PyObject* Board_Count(PythonBoard* self, PyObject* Py_UNUSED(ignored)) {
   return PyLong_FromLong(self->board.Count());
 }
 
+PyObject* Board_Height(PythonBoard* self, PyObject* Py_UNUSED(ignored)) {
+  return PyLong_FromLong(self->board.Height());
+}
+
 PyObject* Board_GetBytes(PyObject* obj) {
   CompactBoard board = reinterpret_cast<PythonBoard*>(obj)->board.ToBytes();
   return PyBytes_FromStringAndSize(reinterpret_cast<const char*>(board.data()), board.size());
@@ -78,6 +82,7 @@ PyMethodDef py_board_class_methods[] = {
     {"IsClean", (PyCFunction)Board_IsClean, METH_NOARGS, "Check board cleanness"},
     {"IsCleanForPerfect", (PyCFunction)Board_IsCleanForPerfect, METH_NOARGS, "Check board cleanness"},
     {"Count", (PyCFunction)Board_Count, METH_NOARGS, "Get cell count"},
+    {"Height", (PyCFunction)Board_Height, METH_NOARGS, "Get board height"},
     {"GetBytes", (PyCFunction)Board_GetBytes, METH_NOARGS, "Get 25-byte representation"},
     {nullptr}};
 } // namespace

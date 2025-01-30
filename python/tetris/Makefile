@@ -1,6 +1,8 @@
+PYTHON=python3
+
 all:
-	python setup.py build_ext --inplace
+	$(PYTHON) setup.py build_ext --inplace
 	chmod 755 *.so
 
 clean:
-	rm -rf build *.so
+	rm -rf build src *.so

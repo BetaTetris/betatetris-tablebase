@@ -15,7 +15,7 @@ TAP_SEQUENCES = [
     np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
 ]
 ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
-STEP_POINTS_INIT = [200, 500, 800]
+STEP_POINTS_INIT = [80, 200, 400]
 STEP_POINTS_FIN = [0, 800, 6000]
 BUCKET_INTERVAL = 5
 BUCKETS = 425 // BUCKET_INTERVAL
@@ -36,8 +36,11 @@ class GameParamManager:
         self._NextBatch()
 
     def UpdateParams(self, params):
-        self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), BUCKETS), dtype='int64')
-        self.step_points_progress, self.board_ratio, self.short_ratio = params
+        if any([i < 0 for i in params]):
+            self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), BUCKETS), dtype='int64')
+        params = [abs(i) for i in params]
+        self.total_cnt, self.board_cnt, self.board_short_cnt = 0, 0, 0
+        self.step_points_progress, self.board_ratio, self.short_ratio = [abs(i) for i in params]
 
     def UpdateState(self, params, pieces: int, lines: int):
         self.total_cnt += pieces
@@ -75,7 +78,7 @@ class GameParamManager:
         n_count[3:6,:,DKS_START:] = np.inf
         if bucket_start > 0: n_count[:,:,:bucket_start] = np.inf
         if bucket_end < BUCKETS: n_count[:,:,bucket_end:] = np.inf
-        n_prob = softmax(-n_count * 0.6)
+        n_prob = softmax(-n_count * 1.0)
         c = self.rng.choice(n_prob.size, p=n_prob.flatten())
         tap_id, adj_delay_id, bucket = np.unravel_index(c, n_prob.shape)
         start_lines = bucket * BUCKET_INTERVAL
