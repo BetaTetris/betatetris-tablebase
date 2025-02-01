@@ -25,7 +25,7 @@ class TorchSaver(ModelSaver):
         except StopIteration:
             device = torch.device('cpu')
 
-        loaded_state = torch.load(str(checkpoint_path / file_name), map_location=device)
+        loaded_state = torch.load(str(checkpoint_path / file_name), weights_only=True, map_location=device)
 
         if self.name != 'model':
             self.model.load_state_dict(loaded_state)

@@ -12,8 +12,6 @@ class Game:
     def __init__(self, seed: int, manager=None):
         self.args = (0, False)
         self.env = tetris.Tetris(seed)
-        self.is_normal = True
-        self.until_clean = False
         self.prev_soft_done = False
         self.manager = manager
         self.params = None
@@ -27,11 +25,12 @@ class Game:
         is_over = np.array([False, False])
         is_over[1] = self.prev_soft_done
         is_over[0] = is_over[1] or self.env.IsOver()
-        self.prev_soft_done = self.until_clean and self.env.GetBoard().IsClean()
+        num_lines = self.env.GetRunLines()
+        is_short = self.params.get('is_short') == True
+        self.prev_soft_done = is_short and num_lines >= 6 and self.env.GetBoard().IsClean()
         if is_over[0]:
-            num_lines = self.env.GetRunLines()
             num_pieces = self.env.GetRunPieces()
-            info = {'is_short': self.until_clean,
+            info = {'is_short': is_short,
                     'is_over': self.env.IsOver(),
                     'reward': self.reward,
                     'score': self.env.GetRunScore(),
@@ -45,8 +44,6 @@ class Game:
     def reset(self):
         self.reward = 0.
         self.prev_soft_done = False
-        self.is_normal = True
-        self.until_clean = False
 
         if self.manager:
             self.params = self.manager.GetNewParam()

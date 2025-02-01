@@ -16,7 +16,7 @@ from labml import monit, tracker, logger, experiment
 
 from generator import GeneratorProcess
 from model import Model
-from config import Configs, LoadConfig
+from config import Configs, LoadConfig, MaxUUID
 from saver import TorchSaver
 
 start_time = time.time()
@@ -260,11 +260,9 @@ if __name__ == "__main__":
         except ValueError:
             uuid = args['uuid']
             if uuid == 'last':
-                nd = 1
-                while os.path.exists('logs/{0}/{0}-{1:03d}'.format(args['name'], nd)):
-                    nd += 1
-                if nd > 1:
-                    uuid = '{}-{:03d}'.format(args['name'], nd - 1)
+                nd = MaxUUID(args['name'])
+                if nd >= 1:
+                    uuid = '{}-{:03d}'.format(args['name'], nd)
         experiment.load(uuid, args['checkpoint'])
     with experiment.start():
         claim_experiment(experiment.get_uuid())

@@ -464,7 +464,7 @@ if __name__ == "__main__":
     models = []
     for model_file in args.models:
         with torch.no_grad():
-            state_dict = torch.load(model_file)
+            state_dict = torch.load(model_file, weights_only=True)
             channels = state_dict['main_start.0.main.0.weight'].shape[0]
             start_blocks = len([0 for i in state_dict if re.fullmatch(r'main_start.*main\.0\.weight', i)])
             end_blocks = len([0 for i in state_dict if re.fullmatch(r'main_end.*main\.0\.weight', i)])

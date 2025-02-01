@@ -57,7 +57,6 @@ class GameParamManager:
         while True:
             data = self._GetNewBoard()
             if data is None: break
-            if data[3] and data[0].IsClean(): continue
             bucket_start = LEVEL_LINES[data[2]] // BUCKET_INTERVAL
             bucket_end = LEVEL_LINES[data[2] + 1] // BUCKET_INTERVAL
             params = self._SampleDistribution(data[4], bucket_start, bucket_end)

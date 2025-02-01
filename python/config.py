@@ -49,6 +49,14 @@ class Configs(BaseConfigs):
     board_file: Optional[str] = None
 
 
+def MaxUUID(name):
+    mx_uuid = 0
+    for i in os.listdir('logs/{}'.format(name)):
+        if i[:len(name)+1] == '{}-'.format(name):
+            mx_uuid = max(mx_uuid, int(i[len(name)+1:]))
+    return mx_uuid
+
+
 def LoadConfig(with_experiment = True):
     parser = argparse.ArgumentParser()
     if with_experiment:
@@ -80,11 +88,7 @@ def LoadConfig(with_experiment = True):
     if with_experiment:
         name = args['name']
         os.makedirs('logs/{}'.format(name), exist_ok = True)
-        mx_uuid = 0
-        for i in os.listdir('logs/{}'.format(name)):
-            if i[:len(name)+1] == '{}-'.format(name):
-                mx_uuid = max(mx_uuid, int(i[len(name)+1:]))
-        uuid = mx_uuid + 1
+        uuid = MaxUUID(name) + 1
         experiment.create(name = args['name'], uuid = '{0}-{1:03d}'.format(args['name'], uuid))
         experiment.configs(conf, override_dict)
     else:
