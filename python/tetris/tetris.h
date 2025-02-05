@@ -38,6 +38,8 @@ class PythonTetris {
 #ifdef NO_ROTATION
   bool is_mirror_;
   bool nnb_;
+#else
+  bool skip_unique_initial_;
 #endif // NO_ROTATION
 
   int GenNextPiece_(int piece) {
@@ -93,6 +95,18 @@ class PythonTetris {
     return {n_reward, reward};
   }
 
+#ifndef NO_ROTATION
+  std::pair<double, double> CheckReducibleInitial_() {
+    if (!skip_unique_initial_ || tetris.IsAdj() || tetris.IsOver()) return {0, 0};
+    auto& move_list = tetris.GetPossibleMoveList();
+    auto initial_mask = tetris.GetInitialMask();
+    if (!move_list.non_adj.empty() || popcount(initial_mask) != 1) return {0, 0};
+    Position pos = move_list.adj[ctz(initial_mask)].first;
+    auto [score, lines] = tetris.InputPlacement(pos, next_piece_);
+    return StepAndCalculateReward_(pos, score, lines);
+  }
+#endif
+
  public:
 #ifdef NO_ROTATION
   TetrisNoro tetris;
@@ -124,7 +138,7 @@ class PythonTetris {
 #else
     int lines = b.Count() % 4 != 0;
     lines += std::uniform_int_distribution<int>(0, kLineCap / 2 - 1)(rng_) * 2;
-    Reset(b, lines);
+    Reset(b, lines, -1, -1, true);
 #endif // NO_ROTATION
   }
 
@@ -150,7 +164,7 @@ class PythonTetris {
   }
 #else // NO_ROTATION
   void Reset(const Board& b, int lines, const int tap_sequence[], int adj_delay,
-             int now_piece = -1, int next_piece = -1) {
+             int now_piece = -1, int next_piece = -1, bool skip_unique_initial = false) {
     if (now_piece == -1 || next_piece == -1) {
       piece_count_ = std::uniform_int_distribution<int>(0, 8)(rng_);
       if (now_piece == -1) now_piece = std::uniform_int_distribution<int>(0, kPieces - 1)(rng_);
@@ -158,11 +172,14 @@ class PythonTetris {
     }
     tetris.Reset(b, lines, now_piece, next_piece, tap_sequence, adj_delay);
     next_piece_ = GenNextPiece_(next_piece);
+    skip_unique_initial_ = skip_unique_initial;
+    CheckReducibleInitial_();
   }
 
-  void Reset(const Board& b, int lines, int now_piece = -1, int next_piece = -1) {
+  void Reset(const Board& b, int lines,
+             int now_piece = -1, int next_piece = -1, bool skip_unique_initial = false) {
     constexpr TAP_SPEED tap_table;
-    Reset(b, lines, tap_table.data(), ADJ_DELAY, now_piece, next_piece);
+    Reset(b, lines, tap_table.data(), ADJ_DELAY, now_piece, next_piece, skip_unique_initial);
   }
 
   std::pair<double, double> DirectPlacement(const Position& pos) {
@@ -180,7 +197,14 @@ class PythonTetris {
   std::pair<double, double> InputPlacement(const Position& pos) {
     Position npos = GetRealPosition(pos);
     auto [score, lines] = tetris.InputPlacement(npos, next_piece_);
-    return StepAndCalculateReward_(npos, score, lines);
+    auto reward = StepAndCalculateReward_(npos, score, lines);
+#ifdef NO_ROTATION
+    return reward;
+#else
+    if (!skip_unique_initial_) return reward;
+    auto reward_2 = CheckReducibleInitial_();
+    return {reward.first + reward_2.first, reward.second + reward_2.second};
+#endif
   }
 
   struct State {
@@ -193,7 +217,7 @@ class PythonTetris {
 #else
     std::array<std::array<std::array<float, 10>, 20>, 6> board;
     std::array<float, 32> meta;
-    std::array<std::array<std::array<float, 10>, 20>, 14> moves;
+    std::array<std::array<std::array<float, 10>, 20>, 18> moves;
     std::array<float, 28> move_meta;
     std::array<int, 2> meta_int;
 #endif
@@ -334,7 +358,7 @@ class PythonTetris {
     // board: shape (6, 20, 10) [board, one, initial_move(4)]
     // meta: shape (32,) [now_piece(7), next_piece(7), is_adj(1), hz(7), adj_delay(6), aggro(3), pad(1)]
     // meta_int: shape (2,) [entry, now_piece]
-    // moves: shape (14, 20, 10) [board, one, moves(4), adj_moves(4), initial_move(4)]
+    // moves: shape (14, 20, 10) [board, one, moves(4), adj_moves(4), initial_move(4), nonreduce_moves(4)]
     // move_meta: shape (28,) [speed(4), to_transition(21), (level-18)*0.1, lines*0.01, pieces*0.004]
     {
       auto byte_board = tetris.GetBoard().ToByteBoard();
@@ -347,8 +371,11 @@ class PythonTetris {
       auto& move_map = tetris.GetPossibleMoveMap();
       for (int r = 0; r < 4; r++) {
         for (int i = 0; i < 20; i++) {
-          for (int j = 0; j < 10; j++) state.moves[2 + r][i][j] = move_map[r][i][j] ? 1 : 0;
-          for (int j = 0; j < 10; j++) state.moves[6 + r][i][j] = move_map[r][i][j] == 2;
+          for (int j = 0; j < 10; j++) {
+            state.moves[2 + r][i][j] = move_map[r][i][j] ? 1 : 0;
+            state.moves[6 + r][i][j] = move_map[r][i][j] >= 2;
+            state.moves[14 + r][i][j] = move_map[r][i][j] && move_map[r][i][j] != 2 ? 1 : 0;
+          }
         }
         memset(state.board.data() + (2 + r), 0, sizeof(state.board[0]));
         memset(state.moves.data() + (10 + r), 0, sizeof(state.moves[0]));

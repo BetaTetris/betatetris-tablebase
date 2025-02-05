@@ -8,6 +8,7 @@ from ev_var import kEvMatrix, kDevMatrix
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 kBoardShape, kMetaShape, kMovesShape, kMoveMetaShape, _ = tetris.Tetris.StateShapes()
 kR = 1 if tetris.Tetris.IsNoro() else 4
+kMoveStart = 2 if tetris.Tetris.IsNoro() else 14
 kH, kW = kBoardShape[1:]
 
 class ConvBlock(nn.Module):
@@ -131,7 +132,7 @@ class Model(nn.Module):
         v = torch.zeros((1, batch), dtype=torch.float32, device=board.device)
         evdev = torch.zeros((2, batch), dtype=torch.float32, device=board.device)
 
-        invalid = moves[:,2:2+kR].view(batch, -1) == 0
+        invalid = moves[:,kMoveStart:kMoveStart+kR].view(batch, -1) == 0
         x = self.board_embed(board, board_meta)
         x = self.main_start(x)
         if kR == 1:

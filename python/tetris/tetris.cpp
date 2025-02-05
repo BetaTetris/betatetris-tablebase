@@ -196,7 +196,7 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
 #ifdef NO_ROTATION
     "start_level", "do_tuck", "nnb", "mirror",
 #else
-    "step_reward", "step_reward_level", "tap_sequence", "adj_delay",
+    "step_reward", "step_reward_level", "tap_sequence", "adj_delay", "skip_unique_initial",
 #endif
     nullptr
   };
@@ -218,8 +218,10 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
   int adj_delay = ADJ_DELAY;
   double step_reward = 200;
   int step_reward_level = 0;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOiOdiOi", (char**)kwlist,
-        &now_obj, &next_obj, &lines, &board_obj, &step_reward, &step_reward_level, &tap_sequence_obj, &adj_delay)) {
+  int skip_unique_initial = 0;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOiOdiOip", (char**)kwlist,
+        &now_obj, &next_obj, &lines, &board_obj, &step_reward, &step_reward_level,
+        &tap_sequence_obj, &adj_delay, &skip_unique_initial)) {
     return nullptr;
   }
   try {
@@ -251,7 +253,7 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
 #ifdef NO_ROTATION
   self->Reset(board, lines, start_level, do_tuck, nnb, mirror, now_piece, next_piece);
 #else
-  self->Reset(board, lines, tap_sequence.data(), adj_delay, now_piece, next_piece);
+  self->Reset(board, lines, tap_sequence.data(), adj_delay, now_piece, next_piece, skip_unique_initial);
   self->SetStepReward(step_reward, step_reward_level);
 #endif
   Py_RETURN_NONE;

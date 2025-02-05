@@ -25,13 +25,13 @@ class Configs(BaseConfigs):
     epochs: int = 1
     # number of worker processes
     n_workers: int = 2
-    env_per_worker: int = 64
+    env_per_worker: int = 100
     # number of steps to run on each process for a single update
-    worker_steps: int = 192
+    worker_steps: int = 128
     # size of mini batches
     n_update_per_epoch: int = 32
     # calculate loss in batches of mini_batch_size
-    mini_batch_size: int = 768
+    mini_batch_size: int = 800
 
     ## loss calculation
     clipping_range: float = 0.2

@@ -48,7 +48,7 @@ class Game:
         if self.manager:
             self.params = self.manager.GetNewParam()
             n_param = {i: j for i, j in self.params.items() if i not in ['tap_id', 'adj_delay_id', 'is_short']}
-            self.env.Reset(**n_param)
+            self.env.Reset(skip_unique_initial=True, **n_param)
         else:
             self.env.ResetRandom()
         return self.env.GetState()

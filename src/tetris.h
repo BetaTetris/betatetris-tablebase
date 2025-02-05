@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <bitset>
 #include <unordered_map>
 #include "hash.h"
 #include "game.h"
@@ -12,7 +13,8 @@ class Tetris {
  public:
   using MoveMap = std::array<ByteBoard, 4>;
   static constexpr uint8_t kNoAdj = 1;
-  static constexpr uint8_t kHasAdj = 2;
+  static constexpr uint8_t kHasAdjReduced = 2;
+  static constexpr uint8_t kHasAdjNonReduced = 3;
 
  private:
   Board board_;
@@ -26,6 +28,7 @@ class Tetris {
   PossibleMoves moves_;
   MoveMap move_map_;
   int consecutive_fail_;
+  uint64_t initial_mask_;
 
   std::array<int, 10> tap_sequence_;
   int adj_delay_;
@@ -37,6 +40,33 @@ class Tetris {
   int run_lines_;
   int run_pieces_;
 
+  void CalculateInitialMask_() {
+    if (moves_.adj.size() > 64) throw std::runtime_error("unexpected many initial placements");
+    initial_mask_ = (1ll << moves_.adj.size()) - 1;
+    if (moves_.adj.size() <= 1) return;
+
+    using AdjItem = std::pair<Position, std::vector<Position>>;
+    std::sort(moves_.adj.begin(), moves_.adj.end(), [](const AdjItem& x, const AdjItem& y) {
+      if (x.second.size() != y.second.size()) return x.second.size() > y.second.size();
+      return abs(x.first.y - 5) < abs(y.first.y - 5);
+    });
+    std::unordered_map<Position, uint8_t> pos_mp;
+    for (auto& [_, i] : moves_.adj) {
+      for (auto& j : i) pos_mp.emplace(j, pos_mp.size());
+    }
+    std::vector<std::bitset<256>> adj_bitset(moves_.adj.size());
+    for (size_t i = 0; i < moves_.adj.size(); i++) {
+      for (auto& j : moves_.adj[i].second) adj_bitset[i][pos_mp[j]] = true;
+    }
+    for (size_t i = 0; i < moves_.adj.size(); i++) {
+      if (!(initial_mask_ >> i & 1)) continue;
+      for (size_t j = 0; j < moves_.adj.size(); j++) {
+        if (i == j || !(initial_mask_ >> j & 1) || moves_.adj[i].second.size() < moves_.adj[j].second.size()) continue;
+        if ((adj_bitset[i] & adj_bitset[j]) == adj_bitset[j]) initial_mask_ &= ~(1ll << j);
+      }
+    }
+  }
+
   void CalculateMoves_(bool regenerate) {
     if (regenerate) {
       moves_ = MoveSearch(LevelSpeed(), adj_delay_, tap_sequence_.data(), *search_table_, board_, now_piece_);
@@ -44,11 +74,15 @@ class Tetris {
         game_over_ = true;
         return;
       }
+      CalculateInitialMask_();
     }
     memset(move_map_.data(), 0, sizeof(move_map_));
     if (!is_adj_) {
       for (auto& i : moves_.non_adj) move_map_[i.r][i.x][i.y] = kNoAdj;
-      for (auto& [i, _] : moves_.adj) move_map_[i.r][i.x][i.y] = kHasAdj;
+      for (size_t idx = 0; idx < moves_.adj.size(); idx++) {
+        auto& i = moves_.adj[idx].first;
+        move_map_[i.r][i.x][i.y] = (initial_mask_ >> idx & 1) ? kHasAdjNonReduced : kHasAdjReduced;
+      }
     } else {
       for (auto& i : moves_.adj[initial_move_].second) move_map_[i.r][i.x][i.y] = kNoAdj;
     }
@@ -120,7 +154,7 @@ class Tetris {
     return move_map_[pos.r][pos.x][pos.y] == kNoAdj;
   }
   bool IsAdjMove(const Position& pos) const {
-    return move_map_[pos.r][pos.x][pos.y] == kHasAdj;
+    return move_map_[pos.r][pos.x][pos.y] >= kHasAdjReduced;
   }
 
   std::pair<int, int> DirectPlacement(const Position& pos, int next_piece) {
@@ -192,6 +226,8 @@ class Tetris {
   }
 
   const MoveMap& GetPossibleMoveMap() const { return move_map_; }
+  const PossibleMoves& GetPossibleMoveList() const { return moves_; }
+  uint64_t GetInitialMask() const { return initial_mask_; }
   const Board& GetBoard() const { return board_; }
   const int* GetTapSequence() const { return tap_sequence_.data(); }
   const int GetAdjDelay() const { return adj_delay_; }
