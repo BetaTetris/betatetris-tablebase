@@ -46,9 +46,11 @@ class Game:
         self.prev_soft_done = False
 
         if self.manager:
-            self.params = self.manager.GetNewParam()
-            n_param = {i: j for i, j in self.params.items() if i not in ['tap_id', 'adj_delay_id', 'is_short']}
-            self.env.Reset(skip_unique_initial=True, **n_param)
+            while True:
+                self.params = self.manager.GetNewParam()
+                n_param = {i: j for i, j in self.params.items() if i not in ['tap_id', 'adj_delay_id', 'is_short']}
+                self.env.Reset(skip_unique_initial=True, **n_param)
+                if not self.env.IsOver(): break
         else:
             self.env.ResetRandom()
         return self.env.GetState()
