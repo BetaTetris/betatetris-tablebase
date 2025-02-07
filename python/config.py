@@ -32,9 +32,12 @@ class Configs(BaseConfigs):
     n_update_per_epoch: int = 32
     # calculate loss in batches of mini_batch_size
     mini_batch_size: int = 800
+    weight_sync_per_epoch: int = 2
 
     ## loss calculation
+    use_kl: bool = False
     clipping_range: float = 0.2
+    beta: float = 5.0
     vf_weight: float = FloatDynamicHyperParam(1, range_ = (0, 5))
     raw_weight: float = FloatDynamicHyperParam(0, range_ = (0, 0.1))
     entropy_weight: float = FloatDynamicHyperParam(1.5e-2, range_ = (0, 5e-2))

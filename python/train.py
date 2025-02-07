@@ -22,7 +22,6 @@ from saver import TorchSaver
 start_time = time.time()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 generator_device = torch.device('cuda:1') if torch.cuda.device_count() > 1 else device
-#device = 'cpu'
 
 class Main:
     def __init__(self, c: Configs, name: str):
@@ -33,6 +32,10 @@ class Main:
         self.batch_size = self.envs * self.c.worker_steps
         assert (self.batch_size % (self.c.n_update_per_epoch * self.c.mini_batch_size) == 0)
         self.update_batch_size = self.batch_size // self.c.n_update_per_epoch
+
+        assert self.c.n_update_per_epoch % self.c.weight_sync_per_epoch == 0
+        assert self.c.worker_steps % self.c.weight_sync_per_epoch == 0
+        self.send_weight_interval = self.c.epochs * self.c.n_update_per_epoch // self.c.weight_sync_per_epoch
 
         # #### Initialize
         # model for sampling
@@ -83,6 +86,7 @@ class Main:
     def train(self, samples: Dict[str, torch.Tensor]):
         """### Train the model based on samples"""
         self._preprocess_samples(samples)
+        n_updates = 0
         for _ in range(self.c.epochs):
             # shuffle for each epoch
             indexes = torch.randperm(self.batch_size)
@@ -102,15 +106,16 @@ class Main:
                                 mini_batch[k] = [i[mini_batch_indexes] for i in v]
                             else:
                                 mini_batch[k] = v[mini_batch_indexes]
-                    loss = self._calc_loss(clip_range=self.c.clipping_range, samples=mini_batch) / loss_mul
+                    loss = self._calc_loss(samples=mini_batch) / loss_mul
                     self._backward(loss)
                 self._grad_update()
+                n_updates += 1
+                if (n_updates + 1) % self.send_weight_interval == 0:
+                    self.generator.SendModel(self.model_opt)
 
-    #@torch.compile
     def _backward(self, loss):
         self.scaler.scale(loss).backward()
 
-    #@torch.compile
     def _grad_update(self):
         # compute gradients
         self.scaler.unscale_(self.optimizer)
@@ -122,7 +127,9 @@ class Main:
     @staticmethod
     def _normalize(adv: torch.Tensor):
         """#### Normalize advantage function"""
-        return (adv - adv.mean()) / (adv.std() + 1e-8)
+        std = adv.std()
+        tracker.add({'advantage_std': std})
+        return (adv - adv.mean()) / (std + 1e-8)
 
     @staticmethod
     def _preprocess_samples(samples: Dict[str, torch.Tensor]):
@@ -131,7 +138,8 @@ class Main:
         samples['advantages'] = Main._normalize(samples['advantages'])
         samples['raw_devs'].clamp_(min=1e-5)
 
-    def _calc_loss(self, samples: Dict[str, torch.Tensor], clip_range: float) -> torch.Tensor:
+    def _calc_loss(self, samples: Dict[str, torch.Tensor]) -> torch.Tensor:
+        clip_range = self.c.clipping_range
         """## PPO Loss"""
         # Sampled observations are fed into the model to get $\pi_\theta(a_t|s_t)$ and $V^{\pi_\theta}(s_t)$;
         pi, value = self.model_opt(samples['obs'])
@@ -146,16 +154,27 @@ class Main:
         log_pi = pi.log_prob(samples['actions'])
         # *this is different from rewards* $r_t$.
         ratio = torch.exp(log_pi - samples['log_pis'])
-        # The ratio is clipped to be close to 1.
-        # Using the normalized advantage
-        #  $\bar{A_t} = \frac{\hat{A_t} - \mu(\hat{A_t})}{\sigma(\hat{A_t})}$
-        #  introduces a bias to the policy gradient estimator,
-        #  but it reduces variance a lot.
-        clipped_ratio = ratio.clamp(min = 1.0 - clip_range,
-                                    max = 1.0 + clip_range)
-        # advantages are normalized
-        policy_reward = torch.min(ratio * samples['advantages'],
-                                  clipped_ratio * samples['advantages'])
+        if self.c.use_kl:
+            # reverse KL objective
+            # Revisiting Design Choices in Proximal Policy Optimization
+            beta = self.c.beta
+            # reverse objective
+            kl_div = kl_divergence(pi, Categorical(logits=samples['pi_logits'])).clamp(max=500)
+            policy_reward = ratio * samples['advantages'] - beta * kl_div
+        else:
+            # CLIP objective
+            # The ratio is clipped to be close to 1.
+            # Using the normalized advantage
+            #  $\bar{A_t} = \frac{\hat{A_t} - \mu(\hat{A_t})}{\sigma(\hat{A_t})}$
+            #  introduces a bias to the policy gradient estimator,
+            #  but it reduces variance a lot.
+            clipped_ratio = ratio.clamp(min = 1.0 - clip_range,
+                                        max = 1.0 + clip_range)
+            # advantages are normalized
+            policy_reward = torch.min(ratio * samples['advantages'],
+                                      clipped_ratio * samples['advantages'])
+            kl_div = .5 * ((samples['log_pis'] - log_pi) ** 2) # approximation
+
         policy_reward[skip_mask] = 0
         policy_reward = policy_reward.mean()
 
@@ -188,13 +207,12 @@ class Main:
                 self.cur_entropy_weight * entropy_bonus)
 
         # for monitoring
-        approx_kl_divergence = .5 * ((samples['log_pis'] - log_pi) ** 2).mean()
         clip_fraction = (abs((ratio - 1.0)) > clip_range).to(torch.float).mean()
         tracker.add({'policy_reward': policy_reward,
                      'vf_loss': vf_loss ** 0.5,
                      'raw_loss': raw_loss,
                      'entropy_bonus': entropy_bonus,
-                     'kl_div': approx_kl_divergence,
+                     'kl_div': kl_div.mean(),
                      'clip_fraction': clip_fraction})
         return loss
 
@@ -214,11 +232,10 @@ class Main:
                 epoch = tracker.get_global_step()
                 # sample with current policy
                 samples, info = self.generator.GetData(device)
-                self.generator.StartGenerate(epoch)
+                self.generator.StartGenerate(epoch, update=True)
                 tracker.add(info)
                 # train the model
                 self.train(samples)
-                self.generator.SendModel(self.model_opt, epoch)
                 # write summary info to the writer, and log to the screen
                 tracker.save()
                 # update hyperparams

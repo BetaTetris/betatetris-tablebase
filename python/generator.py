@@ -3,7 +3,7 @@ import numpy as np, torch
 from multiprocessing import shared_memory
 from torch.multiprocessing import Process, Pipe
 from torch.distributions import Categorical
-from model import Model, obs_to_torch
+from model import Model, obs_to_torch, kH, kW, kR
 
 import tetris
 from game import Worker
@@ -20,6 +20,8 @@ class DataGenerator:
         self.total_games = 0
         self.total_long_games = 0
         self.game_params = None
+        self.recv_weight_interval = c.worker_steps // c.weight_sync_per_epoch
+        self.use_kl = c.use_kl
 
         # initialize tensors for observations
         shapes = [*[(self.envs, *i) for i in tetris.Tetris.StateShapes()],
@@ -54,7 +56,7 @@ class DataGenerator:
 
     def w_range(self, x): return slice(x * self.env_per_worker, (x + 1) * self.env_per_worker)
 
-    def update_model(self, state_dict, epoch = 0):
+    def update_model(self, state_dict, epoch=-1):
         target_device = next(self.model.parameters()).device
         for i in state_dict:
             if state_dict[i].device != target_device:
@@ -69,7 +71,7 @@ class DataGenerator:
             self.game_params = game_params[2:]
         self.gamma, self.lamda = game_params[:2]
 
-    def sample(self, train = True, gpu = False, epoch = 0):
+    def sample(self, train = True, gpu = False, epoch = 0, remote = None):
         """### Sample data with current policy"""
         actions = torch.zeros((self.worker_steps, self.envs), dtype=torch.int32, device=self.device)
         obs = [
@@ -78,6 +80,8 @@ class DataGenerator:
                         device=self.device)
             for shape, typ in zip(tetris.Tetris.StateShapes(), tetris.Tetris.StateTypes())
         ]
+        if self.use_kl:
+            pi_logits = torch.zeros((self.worker_steps, self.envs, kR*kH*kW), dtype = torch.float32, device = self.device)
         log_pis = torch.zeros((self.worker_steps, self.envs), dtype = torch.float32, device = self.device)
         values = torch.zeros((self.worker_steps, 2, self.envs), dtype = torch.float32, device = self.device)
         devs = torch.zeros((self.worker_steps, self.envs), dtype = torch.float32, device = self.device)
@@ -111,6 +115,7 @@ class DataGenerator:
                 values[t] = v[:2] # remove stdev
                 devs[t] = v[2]
                 a = pi.sample()
+                if self.use_kl: pi_logits[t] = pi.logits
                 actions[t] = a
                 log_pis[t] = pi.log_prob(a)
                 actions_cpu = a.cpu().numpy()
@@ -137,6 +142,11 @@ class DataGenerator:
                             ret_info['pcs'].append(info['pieces'])
             self.obs = obs_to_torch(self.obs_np, self.device)
 
+            if remote and (t + 1) % self.recv_weight_interval == 0:
+                cmd, data = remote.recv()
+                assert cmd == 'update_model'
+                self.update_model(data[0], epoch=epoch)
+
         # reshape rewards & log rewards
         score_max = self.rewards[:,:,1].max()
         if train:
@@ -160,6 +170,7 @@ class DataGenerator:
                 'raw_devs': raw_devs,
                 'raw_values': values_t[1] + advantages_t[1],
             }
+            if self.use_kl: samples['pi_logits'] = pi_logits
             #print('raw_devs', samples['raw_devs'].flatten())
             #print('raw_values', samples['raw_values'].flatten())
             #print('skip_mask', samples['skip_mask'].flatten())
@@ -259,11 +270,11 @@ def generator_process(remote, name, c, game_params, device):
         while True:
             cmd, data = remote.recv()
             if cmd == "update_model":
-                generator.update_model(data[0], data[1])
+                generator.update_model(data[0], epoch=data[1])
             elif cmd == "set_param":
                 generator.set_params(data)
             elif cmd == "start_generate":
-                samples = generator.sample(epoch=data)
+                samples = generator.sample(remote=remote if data[0] else None, epoch=data[1])
             elif cmd == "get_data":
                 remote.send(samples)
                 samples = None
@@ -285,16 +296,16 @@ class GeneratorProcess:
         ctx = torch.multiprocessing.get_context('spawn')
         self.process = ctx.Process(target=generator_process, args=(parent, *args))
         self.process.start()
-        self.SendModel(model, -1)
+        self.SendModel(model)
 
-    def SendModel(self, model, epoch):
+    def SendModel(self, model, epoch=-1):
         state_dict = model.state_dict()
         for i in state_dict:
             state_dict[i] = state_dict[i].cpu()
         self.child.send(('update_model', (state_dict, epoch)))
 
-    def StartGenerate(self, epoch):
-        self.child.send(('start_generate', epoch))
+    def StartGenerate(self, epoch, update=False):
+        self.child.send(('start_generate', (update, epoch)))
 
     def SetParams(self, game_params):
         self.child.send(('set_param', game_params))

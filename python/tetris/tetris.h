@@ -80,6 +80,11 @@ class PythonTetris {
 #else // NO_ROTATION
     double reward = score * kRewardMultiplier_;
     double n_reward = reward;
+    if (step_reward_level_ == 0) {
+      if (lines != 4) n_reward *= 0.1;
+    } else {
+      n_reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + step_reward_);
+    }
     if (lines == 4 && pos.x >= 18) n_reward *= kBottomMultiplier_;
     if (!tetris.IsAdj()) {
       next_piece_ = GenNextPiece_(next_piece_);
