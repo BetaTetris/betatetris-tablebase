@@ -15,8 +15,8 @@ TAP_SEQUENCES = [
     np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
 ]
 ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
-STEP_POINTS_INIT = [0, 1200, 3600]
-STEP_POINTS_FIN = [0, 1200, 3600]
+STEP_POINTS_INIT = [0, 800, 2400]
+STEP_POINTS_FIN = [0, 800, 2400]
 BUCKET_INTERVAL = 5
 BUCKETS = 425 // BUCKET_INTERVAL
 LEVEL_LINES = [0, 130, 230, 330, 430]
@@ -70,10 +70,16 @@ class GameParamManager:
         if bucket_start == bucket_end: raise RuntimeError("unexpected")
         KS_START = LEVEL_LINES[2] // BUCKET_INTERVAL
         DKS_START = LEVEL_LINES[3] // BUCKET_INTERVAL
-        n_count[:,5,KS_START:DKS_START] += np.sum(n_count[:,2:5,KS_START:DKS_START], axis=1)
-        n_count[:,2:5,KS_START:DKS_START] = np.inf
-        n_count[:,5,DKS_START:] += np.sum(n_count[:,1:5,DKS_START:], axis=1)
-        n_count[:,1:5,DKS_START:] = np.inf
+        n_count[0,0,:] /= 3
+        n_count[0,1,:] /= 6
+        n_count[2,2,:] /= 3
+        n_count[4,2,:] /= 6
+        #n_count[:,2:6,KS_START:DKS_START] *= 1.6
+        #n_count[:,1:6,DKS_START:] *= 1.8
+        #n_count[:,5,KS_START:DKS_START] += np.sum(n_count[:,2:5,KS_START:DKS_START], axis=1)
+        #n_count[:,2:5,KS_START:DKS_START] = np.inf
+        #n_count[:,5,DKS_START:] += np.sum(n_count[:,1:5,DKS_START:], axis=1)
+        #n_count[:,1:5,DKS_START:] = np.inf
         n_count[3:6,:,DKS_START:] = np.inf
         if bucket_start > 0: n_count[:,:,:bucket_start] = np.inf
         if bucket_end < BUCKETS: n_count[:,:,bucket_end:] = np.inf
