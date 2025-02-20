@@ -80,19 +80,98 @@ class PythonTetris {
 #else // NO_ROTATION
     double reward = score * kRewardMultiplier_;
     double n_reward = reward;
+    double n_step_reward = step_reward_;
+    int tap_4 = tetris.GetTapSequence()[3];
     if (step_reward_level_ == 0) {
+      int now_lines = tetris.GetLines();
+      int penalty_18 = 0, penalty_19 = 0, penalty_29 = 0;
+      if (tap_4 <= 6) {
+        if (tetris.GetTapSequence()[4] <= 10) { // 30
+          penalty_18 = 4000;
+          penalty_19 = 1600;
+          penalty_29 = 400;
+        } else { // slow5
+          penalty_18 = 2500;
+          penalty_19 = 1250;
+          penalty_29 = 100;
+        }
+      } else if (tap_4 <= 8) { // 24
+        penalty_18 = 3200;
+        penalty_19 = 1400;
+        penalty_29 = 300;
+      } else if (tap_4 <= 10) { // 20
+        penalty_18 = 2500;
+        penalty_19 = 1100;
+        penalty_29 = 200;
+      } else if (tap_4 <= 12) { // 15
+        penalty_18 = 1800;
+        penalty_19 = 800;
+      } else if (tap_4 <= 16) { // 12
+        penalty_18 = 1400;
+        penalty_19 = 400;
+      } else {
+        penalty_18 = 700;
+        penalty_19 = 100;
+      }
       // aggressive: reduce burn reward for levels capable of consistent tetris
       if (lines != 4 && !(tetris.LevelSpeed() == kLevel39 || (
             tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] >= 12))) n_reward *= 0.1;
+      // give negative reward for burning
+      int penalty = 0;
+      if (lines && lines != 4) {
+        if (now_lines <= 120) penalty += lines * penalty_18;
+        else if (now_lines <= 220) penalty += lines * penalty_19;
+        else if (now_lines <= 314) penalty += lines * penalty_29;
+      }
+      // prevent intentional topout by providing game over penalty
+      if (tetris.IsOver()) {
+        penalty += penalty_18 * (120 - std::min(120, now_lines));
+        penalty += penalty_19 * (220 - std::min(220, std::max(120, now_lines)));
+        penalty += penalty_29 * (314 - std::min(314, std::max(220, now_lines)));
+        penalty = penalty * 1.05;
+      }
+      n_step_reward = 0;
+      n_reward -= penalty * kRewardMultiplier_;
     } else {
+      double multiplier_18 = 1, multiplier_19 = 1, multiplier_29 = 1;
+      int now_pieces = tetris.GetPieces();
+      if (tap_4 <= 6) { // 30
+        multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        if (tetris.GetTapSequence()[4] <= 10) {
+          multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.2;
+        } else {
+          multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.4;
+        }
+      } else if (tap_4 <= 8) { // 24
+        multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.3;
+      } else if (tap_4 <= 10) { // 20
+        multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.5;
+      } else if (tap_4 <= 12) { // 15
+        multiplier_18 = step_reward_level_ == 2 ? 0.25 : 0.0;
+        multiplier_19 = step_reward_level_ == 2 ? 0.3 : 0.0;
+      } else if (tap_4 <= 16) { // 12
+        multiplier_18 = step_reward_level_ == 2 ? 0.35 : 0.0;
+        multiplier_19 = step_reward_level_ == 2 ? 0.5 : 0.1;
+      } else {
+        multiplier_18 = step_reward_level_ == 2 ? 0.4 : 0.0;
+        multiplier_19 = step_reward_level_ == 2 ? 0.7 : 0.2;
+      }
+      if (now_pieces <= 120 * 10 / 4) n_step_reward *= multiplier_18;
+      else if (now_pieces <= 220 * 10 / 4) n_step_reward *= multiplier_19;
+      else if (now_pieces <= 314 * 10 / 4) n_step_reward *= multiplier_29;
       // scale reward to avoid large step reward get higher
-      n_reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + step_reward_);
+      n_reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + n_step_reward);
     }
     if (lines == 4 && pos.x >= 18) n_reward *= kBottomMultiplier_;
     if (!tetris.IsAdj()) {
       next_piece_ = GenNextPiece_(next_piece_);
       // scale step reward
-      n_reward += step_reward_ * (tetris.GetLevel() + 1) / 30;
+      n_reward += n_step_reward * (tetris.GetLevel() + 1) / 30;
     }
 #ifdef TETRIS_ONLY
     if (lines && lines != 4) {
