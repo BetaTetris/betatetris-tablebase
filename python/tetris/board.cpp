@@ -9,7 +9,10 @@ namespace {
 
 void BoardDealloc(PythonBoard* self) {
   self->~PythonBoard();
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
   Py_TYPE(self)->tp_free((PyObject*)self);
+#pragma GCC diagnostic pop
 }
 
 PyObject* BoardNew(PyTypeObject* type, PyObject* args, PyObject* kwds) {

@@ -9,6 +9,10 @@
 #include <python3.10/Python.h>
 #elif __has_include(<python3.11/Python.h>)
 #include <python3.11/Python.h>
+#elif __has_include(<python3.12/Python.h>)
+#include <python3.12/Python.h>
+#elif __has_include(<python3.13/Python.h>)
+#include <python3.13/Python.h>
 #else
 #include <Python.h>
 #endif

@@ -59,7 +59,7 @@ class Main:
         self.set_game_params(cur_params)
 
     def get_game_params(self):
-        return (self.c.gamma(), self.c.lamda(), self.c.step_points_progress(), self.c.board_ratio(), self.c.short_ratio())
+        return (self.c.gamma(), self.c.lamda(), self.c.burn_over_multiplier(), self.c.board_ratio(), self.c.short_ratio())
 
     def set_optim(self, lr, reg_l2):
         if lr == self.cur_lr and reg_l2 == self.cur_reg_l2: return
@@ -222,7 +222,7 @@ class Main:
         if offset > 1:
             # If resumed, sample several iterations first to reduce sampling bias
             self.generator.SendModel(self.model_opt, offset)
-            for i in range(16): self.generator.StartGenerate(offset)
+            for i in range(self.c.warmup_epochs): self.generator.StartGenerate(offset)
             tracker.save() # increment step
         else:
             self.generator.StartGenerate(offset)

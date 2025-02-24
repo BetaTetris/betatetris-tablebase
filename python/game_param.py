@@ -15,8 +15,6 @@ TAP_SEQUENCES = [
     np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
 ]
 ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
-STEP_POINTS_INIT = [0, 800, 2400]
-STEP_POINTS_FIN = [0, 800, 2400]
 BUCKET_INTERVAL = 5
 BUCKETS = 425 // BUCKET_INTERVAL
 LEVEL_LINES = [0, 130, 230, 330, 430]
@@ -28,8 +26,9 @@ class GameParamManager:
         self.total_cnt = 0
         self.board_cnt = 0
         self.board_short_cnt = 0
-        self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), BUCKETS), dtype='int64')
-        self.step_points_progress = 0.0
+        self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), 3, BUCKETS), dtype='int64')
+        #self.param_count = np.load('cnt.npz')['arr_0']
+        self.burn_over_multiplier = 0.0
         self.board_ratio = 0.0
         self.short_ratio = 0.0
         self.rng = np.random.default_rng()
@@ -37,10 +36,10 @@ class GameParamManager:
 
     def UpdateParams(self, params):
         if any([i < 0 for i in params]):
-            self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), BUCKETS), dtype='int64')
+            self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), 3, BUCKETS), dtype='int64')
         params = [abs(i) for i in params]
         self.total_cnt, self.board_cnt, self.board_short_cnt = 0, 0, 0
-        self.step_points_progress, self.board_ratio, self.short_ratio = [abs(i) for i in params]
+        self.burn_over_multiplier, self.board_ratio, self.short_ratio = [abs(i) for i in params]
 
     def UpdateState(self, params, pieces: int, lines: int):
         self.total_cnt += pieces
@@ -51,7 +50,7 @@ class GameParamManager:
 
         start_bucket = min(params['lines'] // BUCKET_INTERVAL, BUCKETS)
         end_bucket = min((params['lines'] + lines) // BUCKET_INTERVAL + 1, BUCKETS)
-        self.param_count[params['tap_id'], params['adj_delay_id'], start_bucket:end_bucket] += 1
+        self.param_count[params['tap_id'], params['adj_delay_id'], params['step_reward_level'], start_bucket:end_bucket] += 1
 
     def GetNewParam(self):
         while True:
@@ -70,31 +69,28 @@ class GameParamManager:
         if bucket_start == bucket_end: raise RuntimeError("unexpected")
         KS_START = LEVEL_LINES[2] // BUCKET_INTERVAL
         DKS_START = LEVEL_LINES[3] // BUCKET_INTERVAL
-        n_count[0,0,:] /= 3
-        n_count[0,1,:] /= 6
-        n_count[2,2,:] /= 3
-        n_count[4,2,:] /= 6
-        #n_count[:,2:6,KS_START:DKS_START] *= 1.6
-        #n_count[:,1:6,DKS_START:] *= 1.8
-        #n_count[:,5,KS_START:DKS_START] += np.sum(n_count[:,2:5,KS_START:DKS_START], axis=1)
-        #n_count[:,2:5,KS_START:DKS_START] = np.inf
-        #n_count[:,5,DKS_START:] += np.sum(n_count[:,1:5,DKS_START:], axis=1)
-        #n_count[:,1:5,DKS_START:] = np.inf
-        n_count[3:6,:,DKS_START:] = np.inf
-        if bucket_start > 0: n_count[:,:,:bucket_start] = np.inf
-        if bucket_end < BUCKETS: n_count[:,:,bucket_end:] = np.inf
+        n_count[0,0] /= 3
+        n_count[0,1] /= 6
+        n_count[2,2] /= 3
+        n_count[4,2] /= 6
+        #n_count[:,2:6,:,KS_START:DKS_START] *= 1.6
+        #n_count[:,1:6,:,DKS_START:] *= 1.8
+        #n_count[:,5,:,KS_START:DKS_START] += np.sum(n_count[:,2:5,:,KS_START:DKS_START], axis=1)
+        #n_count[:,2:5,:,KS_START:DKS_START] = np.inf
+        #n_count[:,5,:,DKS_START:] += np.sum(n_count[:,1:5,:,DKS_START:], axis=1)
+        #n_count[:,1:5,:,DKS_START:] = np.inf
+        n_count[3:6,:,:,DKS_START:] = np.inf
+        if bucket_start > 0: n_count[:,:,:,:bucket_start] = np.inf
+        if bucket_end < BUCKETS: n_count[:,:,:,bucket_end:] = np.inf
         n_prob = softmax(-n_count * 1.0)
         c = self.rng.choice(n_prob.size, p=n_prob.flatten())
-        tap_id, adj_delay_id, bucket = np.unravel_index(c, n_prob.shape)
+        tap_id, adj_delay_id, step_reward_level, bucket = np.unravel_index(c, n_prob.shape)
         start_lines = bucket * BUCKET_INTERVAL
         if (start_lines % 2 != 0) != (cells % 4 != 0): start_lines += 1
         lines = self.rng.choice(np.arange(start_lines, (bucket + 1) * BUCKET_INTERVAL, 2))
-        step_reward_level = self.rng.choice(3)
-        l, r = STEP_POINTS_INIT[step_reward_level], STEP_POINTS_FIN[step_reward_level]
-        step_points = l + (r - l) * self.step_points_progress
         return {'tap_sequence': TAP_SEQUENCES[tap_id].tolist(), 'tap_id': tap_id,
                 'adj_delay': ADJ_DELAYS[adj_delay_id], 'adj_delay_id': adj_delay_id,
-                'step_reward_level': step_reward_level, 'step_reward': step_points,
+                'step_reward_level': step_reward_level, 'burn_over_multiplier': self.burn_over_multiplier,
                 'lines': lines}
 
     def _GetNewBoard(self):

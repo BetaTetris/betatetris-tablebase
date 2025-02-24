@@ -123,7 +123,10 @@ std::vector<int> GetArray(PyObject* obj) {
 
 void TetrisDealloc(PythonTetris* self) {
   self->~PythonTetris();
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
   Py_TYPE(self)->tp_free((PyObject*)self);
+#pragma GCC diagnostic pop
 }
 
 PyObject* TetrisNew(PyTypeObject* type, PyObject* args, PyObject* kwds) {
@@ -196,7 +199,7 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
 #ifdef NO_ROTATION
     "start_level", "do_tuck", "nnb", "mirror",
 #else
-    "step_reward", "step_reward_level", "tap_sequence", "adj_delay", "skip_unique_initial",
+    "burn_over_multiplier", "step_reward_level", "tap_sequence", "adj_delay", "skip_unique_initial",
 #endif
     nullptr
   };
@@ -216,11 +219,11 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
   std::vector<int> tap_sequence;
   PyObject* tap_sequence_obj = nullptr;
   int adj_delay = ADJ_DELAY;
-  double step_reward = 200;
+  double burn_over_multiplier = 0;
   int step_reward_level = 0;
   int skip_unique_initial = 0;
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOiOdiOip", (char**)kwlist,
-        &now_obj, &next_obj, &lines, &board_obj, &step_reward, &step_reward_level,
+        &now_obj, &next_obj, &lines, &board_obj, &burn_over_multiplier, &step_reward_level,
         &tap_sequence_obj, &adj_delay, &skip_unique_initial)) {
     return nullptr;
   }
@@ -254,7 +257,8 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
   self->Reset(board, lines, start_level, do_tuck, nnb, mirror, now_piece, next_piece);
 #else
   self->Reset(board, lines, tap_sequence.data(), adj_delay, now_piece, next_piece, skip_unique_initial);
-  self->SetStepReward(step_reward, step_reward_level);
+  self->SetStepReward(step_reward_level);
+  self->SetBurnOverMultiplier(burn_over_multiplier);
 #endif
   Py_RETURN_NONE;
 }

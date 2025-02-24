@@ -338,7 +338,12 @@ class TetrisNoro {
     if (piece < 0 || piece >= (int)kPieces) throw std::range_error("Invalid piece");
     next_piece_ = piece;
   }
-  void SetLines(int lines) { lines_ = lines; }
+  void SetLines(int lines) {
+    if (lines % 2 != lines_ % 2) throw std::range_error("Invalid lines");
+    int pieces_diff = (lines - lines_) * 10 / 4;
+    lines_ = lines;
+    pieces_ += pieces_diff;
+  }
 
   int LinesToNextSpeed() const {
     int speed = LevelSpeed();
