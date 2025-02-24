@@ -222,8 +222,12 @@ class Tetris {
     if (GetLevelSpeed(GetLevelByLines(lines)) != LevelSpeed()) {
       throw std::range_error("Cannot set lines to different speed");
     }
+    int pieces_diff = (lines - lines_) * 10 / 4;
     lines_ = lines;
+    pieces_ += pieces_diff;
   }
+
+  void ForceOver() { game_over_ = true; }
 
   const MoveMap& GetPossibleMoveMap() const { return move_map_; }
   const PossibleMoves& GetPossibleMoveList() const { return moves_; }

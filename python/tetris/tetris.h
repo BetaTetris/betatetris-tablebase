@@ -81,37 +81,53 @@ class PythonTetris {
     double reward = score * kRewardMultiplier_;
     double n_reward = reward;
     double n_step_reward = step_reward_;
+    double bottom_multiplier = kBottomMultiplier_;
     int tap_4 = tetris.GetTapSequence()[3];
     if (step_reward_level_ == 0) {
       int now_lines = tetris.GetLines();
       int penalty_18 = 0, penalty_19 = 0, penalty_29 = 0;
+      double over_18 = 0, over_19 = 0;
       if (tap_4 <= 6) {
         if (tetris.GetTapSequence()[4] <= 10) { // 30
           penalty_18 = 4000;
           penalty_19 = 1600;
           penalty_29 = 400;
+          over_18 = 0.05;
+          over_19 = 0.035;
         } else { // slow5
           penalty_18 = 2500;
           penalty_19 = 1250;
           penalty_29 = 100;
+          over_18 = 0.035;
+          over_19 = 0.025;
         }
       } else if (tap_4 <= 8) { // 24
         penalty_18 = 3200;
         penalty_19 = 1400;
         penalty_29 = 300;
+        over_18 = 0.042;
+        over_19 = 0.03;
       } else if (tap_4 <= 10) { // 20
         penalty_18 = 2500;
         penalty_19 = 1100;
         penalty_29 = 200;
+        over_18 = 0.035;
+        over_19 = 0.025;
       } else if (tap_4 <= 12) { // 15
         penalty_18 = 1800;
         penalty_19 = 800;
+        over_18 = 0.028;
+        over_19 = 0.02;
       } else if (tap_4 <= 16) { // 12
         penalty_18 = 1400;
         penalty_19 = 400;
+        over_18 = 0.024;
+        over_19 = 0.015;
       } else {
         penalty_18 = 700;
         penalty_19 = 100;
+        over_18 = 0.02;
+        over_19 = 0.013;
       }
       // aggressive: reduce burn reward for levels capable of consistent tetris
       if (lines != 4 && !(tetris.LevelSpeed() == kLevel39 || (
@@ -119,9 +135,13 @@ class PythonTetris {
       // give negative reward for burning
       int penalty = 0;
       if (lines && lines != 4) {
-        if (now_lines <= 120) penalty += lines * penalty_18;
-        else if (now_lines <= 220) penalty += lines * penalty_19;
+        double over_prob = 0;
+        if (now_lines <= 120) penalty += lines * penalty_18, over_prob = over_18;
+        else if (now_lines <= 220) penalty += lines * penalty_19, over_prob = over_19;
         else if (now_lines <= 314) penalty += lines * penalty_29;
+        if (skip_unique_initial_ && std::uniform_real_distribution<float>(0, 1)(rng_) < 1 - std::pow(1 - over_prob, lines)) {
+          tetris.ForceOver();
+        }
       }
       // prevent intentional topout by providing game over penalty
       if (tetris.IsOver()) {
@@ -133,7 +153,8 @@ class PythonTetris {
       n_step_reward = 0;
       n_reward -= penalty * kRewardMultiplier_;
     } else {
-      double multiplier_18 = 1, multiplier_19 = 1, multiplier_29 = 1;
+      double multiplier_18 = 1, multiplier_19 = 1, multiplier_29 = 1, multiplier_39 = 1;
+      bool no_scale_29 = false, no_scale_39 = false;
       int now_pieces = tetris.GetPieces();
       if (tap_4 <= 6) { // 30
         multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
@@ -143,10 +164,13 @@ class PythonTetris {
         } else {
           multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.4;
         }
+        no_scale_39 = true;
+        if (now_pieces <= 330 * 10 / 4) multiplier_39 = 1.5;
       } else if (tap_4 <= 8) { // 24
         multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
         multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
         multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.3;
+        no_scale_39 = true;
       } else if (tap_4 <= 10) { // 20
         multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
         multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
@@ -154,9 +178,12 @@ class PythonTetris {
       } else if (tap_4 <= 12) { // 15
         multiplier_18 = step_reward_level_ == 2 ? 0.25 : 0.0;
         multiplier_19 = step_reward_level_ == 2 ? 0.3 : 0.0;
+        no_scale_29 = true;
+        if (now_pieces <= 230 * 10 / 4) multiplier_29 = 1.5;
       } else if (tap_4 <= 16) { // 12
         multiplier_18 = step_reward_level_ == 2 ? 0.35 : 0.0;
         multiplier_19 = step_reward_level_ == 2 ? 0.5 : 0.1;
+        no_scale_29 = true;
       } else {
         multiplier_18 = step_reward_level_ == 2 ? 0.4 : 0.0;
         multiplier_19 = step_reward_level_ == 2 ? 0.7 : 0.2;
@@ -164,10 +191,16 @@ class PythonTetris {
       if (now_pieces <= 120 * 10 / 4) n_step_reward *= multiplier_18;
       else if (now_pieces <= 220 * 10 / 4) n_step_reward *= multiplier_19;
       else if (now_pieces <= 314 * 10 / 4) n_step_reward *= multiplier_29;
+      else n_step_reward *= multiplier_39;
       // scale reward to avoid large step reward get higher
+      if ((no_scale_39 && tetris.LevelSpeed() == kLevel39) ||
+          (no_scale_29 && (tetris.LevelSpeed() == kLevel29 || tetris.LevelSpeed() == kLevel39))) {
+        n_reward = ScoreFromLevel(tetris.GetLevel(), 1) * lines * kRewardMultiplier_;
+        bottom_multiplier = 1.0;
+      }
       n_reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + n_step_reward);
     }
-    if (lines == 4 && pos.x >= 18) n_reward *= kBottomMultiplier_;
+    if (lines == 4 && pos.x >= 18) n_reward *= bottom_multiplier;
     if (!tetris.IsAdj()) {
       next_piece_ = GenNextPiece_(next_piece_);
       // scale step reward
