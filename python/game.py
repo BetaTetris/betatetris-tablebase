@@ -106,6 +106,7 @@ def worker_process(remote, name: str, shms: list, idx: slice, seed: int, board_f
         print(traceback.format_exc())
         raise
     finally:
+        manager.SaveParams()
         remote.close()
         for i in shms: i[0].close()
 

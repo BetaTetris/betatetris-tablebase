@@ -1,3 +1,4 @@
+import os
 import os.path
 from filelock import FileLock
 import numpy as np
@@ -33,6 +34,9 @@ class GameParamManager:
         self.short_ratio = 0.0
         self.rng = np.random.default_rng()
         self._NextBatch()
+
+    def SaveParams(self):
+        np.savez_compressed(f'cnt{os.getpid()}.npz', self.param_count)
 
     def UpdateParams(self, params):
         if any([i < 0 for i in params]):
