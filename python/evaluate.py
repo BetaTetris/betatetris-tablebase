@@ -147,6 +147,23 @@ class RNGRealistic:
         return self.prev
 
 
+TAP_SEQUENCES = {
+    '30hz': np.arange(10) * 2,
+    '24hz': np.array([0, 3, 5, 8, 10, 13, 15, 18, 20, 23]),
+    '20hz': np.arange(10) * 3,
+    '15hz': np.arange(10) * 4,
+    '12hz': np.arange(10) * 5,
+    '10hz': np.arange(10) * 6,
+    'slow5': np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
+}
+ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
+AGGRESSION_LEVELS = {
+    'high': 0,
+    'mid': 1,
+    'low': 2,
+}
+
+
 class Game:
     def __init__(self):
         self.env = tetris.Tetris()
@@ -166,19 +183,29 @@ class Game:
         score = self.env.GetRunScore()
         for i in range(4):
             if old_lines < LEVELS[i] <= lines: self.stats[i] = score
+        if args.line_clear_history and lines > old_lines:
+            self.line_clear_hist += str(lines - old_lines)
         if self.env.IsOver():
             for i in range(4):
                 if LEVELS[i] > lines: self.stats[i] = score
             return False
+        if args.keep_lines is not None and lines >= args.keep_lines + 2:
+            self.env.SetLines(lines - 2)
         if self.env.GetPieces() != old_pieces:
             self.env.SetNextPiece(self.rng.spawn())
         return True
 
     def get_stats(self):
-        return [self.seed] + self.stats + [self.env.GetLines()]
+        lst = [self.seed] + self.stats + [self.env.GetLines()]
+        if args.keep_lines is not None:
+            lst.append(self.env.GetRunLines())
+        if args.line_clear_history:
+            lst.append(self.line_clear_hist)
+        return lst
 
     def reset(self, seed, board=None, now=None):
         self.seed = seed
+        self.line_clear_hist = ''
         self.rng.reset(seed)
         if now is None: now = self.rng.spawn()
         nxt = self.rng.spawn()
@@ -190,6 +217,9 @@ class Game:
             reset_args['mirror'] = args.mirror
         else:
             reset_args['lines'] = args.start_lines
+            reset_args['adj_delay'] = args.adj_delay
+            reset_args['tap_sequence'] = TAP_SEQUENCES[args.tap_speed].tolist()
+            reset_args['step_reward_level'] = AGGRESSION_LEVELS[args.aggression]
             if board:
                 reset_args['board'] = board
         self.env.Reset(now, nxt, **reset_args)
@@ -441,11 +471,16 @@ if __name__ == "__main__":
         parser.add_argument('--mirror', action='store_true')
     else:
         parser.add_argument('-l', '--start-lines', type=int, default=0)
+        parser.add_argument('--adj-delay', type=int, default=18, choices=ADJ_DELAYS)
+        parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCES))
+        parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVELS))
     parser.add_argument('-m', '--max-lines', type=int)
+    parser.add_argument('--keep-lines', type=int)
     parser.add_argument('-b', '--batch-size', type=int, default=512)
     parser.add_argument('-w', '--workers', type=int, default=2)
     parser.add_argument('-o', '--output', type=str)
     parser.add_argument('-s', '--server', type=str)
+    parser.add_argument('--line-clear-history', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--gym-rng', action='store_true')
     parser.add_argument('--realistic-rng', action='store_true')
