@@ -57,7 +57,9 @@ def MaxUUID(name):
     mx_uuid = 0
     for i in os.listdir('logs/{}'.format(name)):
         if i[:len(name)+1] == '{}-'.format(name):
-            mx_uuid = max(mx_uuid, int(i[len(name)+1:]))
+            try:
+                mx_uuid = max(mx_uuid, int(i[len(name)+1:]))
+            except ValueError: pass
     return mx_uuid
 
 
