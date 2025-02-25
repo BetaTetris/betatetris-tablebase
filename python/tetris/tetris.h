@@ -132,7 +132,7 @@ class PythonTetris {
       }
       // aggressive: reduce burn reward for levels capable of consistent tetris
       if (lines != 4 && !(tetris.LevelSpeed() == kLevel39 || (
-            tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] >= 12))) n_reward *= 0.1;
+            tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] < 12))) n_reward *= 0.1;
       // give negative reward and random topouts for burning
       int penalty = 0;
       if (lines && lines != 4) {
