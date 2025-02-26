@@ -4,6 +4,10 @@
 #include "../../src/tetris.h"
 #include "python.h"
 
+struct Reward {
+  double reward, raw_reward, live_prob, over_reward;
+};
+
 class PythonTetris {
  public:
   PyObject_HEAD
@@ -68,19 +72,21 @@ class PythonTetris {
 #endif
   }
 
-  std::pair<double, double> StepAndCalculateReward_(const Position& pos, int score, int lines) {
-    if (score == -1) return {kInvalidReward_, 0.0f};
+  Reward StepAndCalculateReward_(const Position& pos, int score, int lines) {
+    if (score == -1) return {kInvalidReward_, 0.0, 1.0, 0.0};
+    Reward ret = {0.0, 0.0, 1.0, 0.0};
 #ifdef NO_ROTATION
     int pre_lines = tetris.GetLines() - lines;
-    double n_reward = step_reward_;
+    ret.reward = step_reward_;
     for (int i = pre_lines; i < pre_lines + lines; i++) {
-      n_reward += std::exp(GetNoroLineRewardExp(i, tetris.GetStartLevel(), tetris.DoTuck(), nnb_));
+      ret.reward += std::exp(GetNoroLineRewardExp(i, tetris.GetStartLevel(), tetris.DoTuck(), nnb_));
     }
     next_piece_ = GenNextPiece_(next_piece_);
-    double reward = lines * kRawMultiplier_;
+    ret.raw_reward = lines * kRawMultiplier_;
+    return ret;
 #else // NO_ROTATION
-    double reward = score * kRewardMultiplier_;
-    double n_reward = reward;
+    ret.raw_reward = score * kRewardMultiplier_;
+    ret.reward = ret.raw_reward;
     double n_step_reward = step_reward_;
     double bottom_multiplier = kBottomMultiplier_;
     int tap_4 = tetris.GetTapSequence()[3];
@@ -130,32 +136,30 @@ class PythonTetris {
       };
       // aggressive: reduce burn reward for levels capable of consistent tetris
       if (lines != 4 && !(tetris.LevelSpeed() == kLevel39 || (
-            tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] >= 12))) n_reward *= 0.1;
+            tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] >= 12))) ret.reward *= 0.1;
+      // prevent intentional topout by providing game over penalty
       int penalty_18 = std::max(kOverProb[0][tap_mode][adj_mode] - 0.01, 0.0) * 60000;
       int penalty_19 = std::max(kOverProb[1][tap_mode][adj_mode] - 0.01, 0.0) * 30000;
       int penalty_29 = std::max(kOverProb[2][tap_mode][adj_mode] - 0.01, 0.0) * 15000;
-      // give negative reward and random topouts for burning
       int penalty = 0;
-      if (lines && lines != 4) {
-        double live_prob = 1;
-        for (int i = now_lines - lines; i < now_lines; i++) {
-          if (i <= 124) live_prob *= 1 - kOverProb[0][tap_mode][adj_mode], penalty += penalty_18;
-          else if (i <= 224) live_prob *= 1 - kOverProb[1][tap_mode][adj_mode], penalty += penalty_19;
-          else if (i <= 320) live_prob *= 1 - kOverProb[2][tap_mode][adj_mode], penalty += penalty_29;
-        }
-        double adjusted_over_prob = 1 - std::pow(live_prob, burn_over_multiplier_);
-        if (skip_unique_initial_ && std::uniform_real_distribution<float>(0, 1)(rng_) < adjusted_over_prob) {
-          tetris.ForceOver();
-        }
-      }
-      // prevent intentional topout by providing game over penalty
+      penalty += penalty_18 * (124 - std::min(124, now_lines));
+      penalty += penalty_19 * (224 - std::min(224, std::max(124, now_lines)));
+      penalty += penalty_29 * (320 - std::min(320, std::max(224, now_lines)));
+      penalty = penalty * 1.05;
       if (tetris.IsOver()) {
-        penalty += penalty_18 * (124 - std::min(124, now_lines));
-        penalty += penalty_19 * (224 - std::min(224, std::max(124, now_lines)));
-        penalty += penalty_29 * (320 - std::min(320, std::max(224, now_lines)));
-        penalty = penalty * 1.05;
+        ret.reward -= penalty * kRewardMultiplier_;
+      } else {
+        ret.over_reward = -penalty * kRewardMultiplier_;
       }
-      n_reward -= penalty * kRewardMultiplier_;
+      // give random topouts for burning
+      if (lines && lines != 4) {
+        for (int i = now_lines - lines; i < now_lines; i++) {
+          if (i <= 124) ret.live_prob *= 1 - kOverProb[0][tap_mode][adj_mode], penalty += penalty_18;
+          else if (i <= 224) ret.live_prob *= 1 - kOverProb[1][tap_mode][adj_mode], penalty += penalty_19;
+          else if (i <= 320) ret.live_prob *= 1 - kOverProb[2][tap_mode][adj_mode], penalty += penalty_29;
+        }
+        ret.live_prob = std::pow(ret.live_prob, burn_over_multiplier_);
+      }
       n_step_reward = 0;
     } else {
       double multiplier_18 = 1, multiplier_19 = 1, multiplier_29 = 1, multiplier_39 = 1;
@@ -200,33 +204,33 @@ class PythonTetris {
       // scale reward to avoid large step reward get higher
       if ((no_scale_39 && tetris.LevelSpeed() == kLevel39) ||
           (no_scale_29 && (tetris.LevelSpeed() == kLevel29 || tetris.LevelSpeed() == kLevel39))) {
-        n_reward = ScoreFromLevel(tetris.GetLevel(), 1) * lines * kRewardMultiplier_;
+        ret.reward = ScoreFromLevel(tetris.GetLevel(), 1) * lines * kRewardMultiplier_;
         bottom_multiplier = 1.0;
       }
-      n_reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + n_step_reward);
+      ret.reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + n_step_reward);
     }
-    if (lines == 4 && pos.x >= 18) n_reward *= bottom_multiplier;
+    if (lines == 4 && pos.x >= 18) ret.reward *= bottom_multiplier;
     if (!tetris.IsAdj()) {
       next_piece_ = GenNextPiece_(next_piece_);
       // scale step reward
-      n_reward += n_step_reward * (tetris.GetLevel() + 1) / 30;
+      ret.reward += n_step_reward * (tetris.GetLevel() + 1) / 30;
     }
 #ifdef TETRIS_ONLY
     if (lines && lines != 4) {
-      n_reward *= kGameOverMultiplier_;
+      ret.reward *= kGameOverMultiplier_;
     }
-    if (tetris.IsOver()) n_reward += kGameOverReward;
+    if (tetris.IsOver()) ret.reward += kGameOverReward;
 #endif // TETRIS_ONLY
+    return ret;
 #endif // NO_ROTATION
-    return {n_reward, reward};
   }
 
 #ifndef NO_ROTATION
-  std::pair<double, double> CheckReducibleInitial_() {
-    if (!skip_unique_initial_ || tetris.IsAdj() || tetris.IsOver()) return {0, 0};
+  Reward CheckReducibleInitial_() {
+    if (!skip_unique_initial_ || tetris.IsAdj() || tetris.IsOver()) return {0, 0, 1, 0};
     auto& move_list = tetris.GetPossibleMoveList();
     auto initial_mask = tetris.GetInitialMask();
-    if (!move_list.non_adj.empty() || popcount(initial_mask) != 1) return {0, 0};
+    if (!move_list.non_adj.empty() || popcount(initial_mask) != 1) return {0, 0, 1, 0};
     Position pos = move_list.adj[ctz(initial_mask)].first;
     auto [score, lines] = tetris.InputPlacement(pos, next_piece_);
     return StepAndCalculateReward_(pos, score, lines);
@@ -308,7 +312,7 @@ class PythonTetris {
     Reset(b, lines, tap_table.data(), ADJ_DELAY, now_piece, next_piece, skip_unique_initial);
   }
 
-  std::pair<double, double> DirectPlacement(const Position& pos) {
+  Reward DirectPlacement(const Position& pos) {
     Position npos = GetRealPosition(pos);
     auto [score, lines] = tetris.DirectPlacement(npos, next_piece_);
     return StepAndCalculateReward_(npos, score, lines);
@@ -325,7 +329,7 @@ class PythonTetris {
   }
 #endif // NO_ROTATION
 
-  std::pair<double, double> InputPlacement(const Position& pos) {
+  Reward InputPlacement(const Position& pos) {
     Position npos = GetRealPosition(pos);
     auto [score, lines] = tetris.InputPlacement(npos, next_piece_);
     auto reward = StepAndCalculateReward_(npos, score, lines);
@@ -334,7 +338,8 @@ class PythonTetris {
 #else
     if (!skip_unique_initial_) return reward;
     auto reward_2 = CheckReducibleInitial_();
-    return {reward.first + reward_2.first, reward.second + reward_2.second};
+    return {reward.reward + reward_2.reward, reward.raw_reward + reward_2.raw_reward,
+            reward.live_prob, reward.over_reward}; // initial reduce won't cause game over
 #endif
   }
 

@@ -87,13 +87,8 @@ std::optional<FrameSequence> ArrayToFrameSequence(PyObject* obj) {
 }
 #endif // !NO_ROTATION
 
-PyObject* GetRewardObj(double reward, double raw_reward) {
-  PyObject* r1 = PyFloat_FromDouble(reward);
-  PyObject* r2 = PyFloat_FromDouble(raw_reward);
-  PyObject* ret = PyTuple_Pack(2, r1, r2);
-  Py_DECREF(r1);
-  Py_DECREF(r2);
-  return ret;
+PyObject* GetRewardObj(Reward reward) {
+  return Py_BuildValue("(dddd)", reward.reward, reward.raw_reward, reward.live_prob, reward.over_reward);
 }
 
 // read Python list or NumPy array into std::vector<int>
@@ -151,8 +146,7 @@ PyObject* Tetris_InputPlacement(PythonTetris* self, PyObject* args, PyObject* kw
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
-  auto [reward, raw_reward] = self->InputPlacement(pos);
-  return GetRewardObj(reward, raw_reward);
+  return GetRewardObj(self->InputPlacement(pos));
 }
 
 #ifndef NO_ROTATION
@@ -162,8 +156,7 @@ PyObject* Tetris_DirectPlacement(PythonTetris* self, PyObject* args, PyObject* k
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
-  auto [reward, raw_reward] = self->DirectPlacement(pos);
-  return GetRewardObj(reward, raw_reward);
+  return GetRewardObj(self->DirectPlacement(pos));
 }
 #endif // !NO_ROTATION
 

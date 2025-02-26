@@ -25,7 +25,7 @@ class DataGenerator:
 
         # initialize tensors for observations
         shapes = [*[(self.envs, *i) for i in tetris.Tetris.StateShapes()],
-                  (self.envs, c.worker_steps, 2),
+                  (self.envs, c.worker_steps, 4),
                   (self.envs, c.worker_steps, 2)]
         types = [*[np.dtype(i) for i in tetris.Tetris.StateTypes()],
                  np.dtype('float32'),
@@ -209,7 +209,7 @@ class DataGenerator:
         with torch.no_grad():
             # values: (t, 2, env)
             # devs: (t, env)
-            # (env, t, 2) -> (t, 2, env)
+            # (env, t, 4) -> (t, 4, env)
             rewards = torch.permute(torch.from_numpy(rewards).to(self.device), (1, 2, 0))
             # (env, t, 2) -> (2, t, env)
             done_torch = torch.permute(torch.from_numpy(done).to(self.device), (2, 1, 0))
@@ -219,6 +219,10 @@ class DataGenerator:
             #print('devs', devs.flatten())
             done_neg = ~done_torch[0]
             soft_done = done_torch[1]
+            live_probs = rewards[:,2:4].clone() # (t, 2, env); the second will be overwritten
+            live_probs[:,1] = 1.0
+            over_rewards = rewards[:,3].unsqueeze(1) # (t, 1, env); the values does not matter for raw reward since live_prob=1
+            rewards = rewards[:,:2].clone()
 
             # advantages table
             advantages = torch.zeros((self.worker_steps, 2, self.envs), dtype = torch.float32, device = self.device)
@@ -226,9 +230,9 @@ class DataGenerator:
             last_advantage = torch.zeros((2, self.envs), dtype = torch.float32, device = self.device)
 
             # $V(s_{t+1})$
-            last_value = self.model(self.obs)[1]
+            last_value = self.model(self.obs)[1] # (3, env)
             last_dev = last_value[2]
-            last_value = last_value[:2] # remove stdev
+            last_value = last_value[:2].clone() # remove stdev
             gammas = torch.Tensor([self.gamma, 1.0]).unsqueeze(1).to(self.device)
             lamdas = torch.Tensor([self.lamda, 1.0]).unsqueeze(1).to(self.device)
 
@@ -238,9 +242,10 @@ class DataGenerator:
                 last_dev *= done_mask
                 # last_value = last_value * done_mask
                 # last_advantage = last_advantage * done_mask
-                # $\delta_t = reward[t] - value[t] + last_value * gammas$
-                # $\hat{A_t} = \delta_t + \gamma \lambda \hat{A_{t+1}} (gam * lam * last_advantage)$
-                last_advantage = rewards[t] - values[t] + gammas * (last_value + lamdas * last_advantage) * done_mask
+                # delta[t] = reward[t] - value[t] + (1 - live[t]) * over[t] + live[t] * last_value * gammas
+                # GAE[t] = delta[t] + live[t] * gamma * lambda * GAE[t+1]
+                last_advantage = (rewards[t] - values[t] + (1.0 - live_probs[t]) * over_rewards[t] +
+                                  live_probs[t] * gammas * (last_value + lamdas * last_advantage) * done_mask)
                 # note that we are collecting in reverse order.
                 advantages[t] = last_advantage
                 raw_devs[t] = last_dev
