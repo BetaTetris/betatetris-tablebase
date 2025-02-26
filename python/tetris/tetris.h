@@ -130,7 +130,7 @@ class PythonTetris {
       };
       // aggressive: reduce burn reward for levels capable of consistent tetris
       if (lines != 4 && !(tetris.LevelSpeed() == kLevel39 || (
-            tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] < 12))) n_reward *= 0.1;
+            tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] >= 12))) n_reward *= 0.1;
       int penalty_18 = std::max(kOverProb[0][tap_mode][adj_mode] - 0.01, 0.0) * 60000;
       int penalty_19 = std::max(kOverProb[1][tap_mode][adj_mode] - 0.01, 0.0) * 30000;
       int penalty_29 = std::max(kOverProb[2][tap_mode][adj_mode] - 0.01, 0.0) * 15000;
