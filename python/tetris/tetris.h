@@ -86,70 +86,73 @@ class PythonTetris {
     int tap_4 = tetris.GetTapSequence()[3];
     if (step_reward_level_ == 0) {
       int now_lines = tetris.GetLines();
-      int penalty_18 = 0, penalty_19 = 0, penalty_29 = 0;
-      double over_18 = 0, over_19 = 0;
-      if (tap_4 <= 6) {
-        if (tetris.GetTapSequence()[4] <= 10) { // 30
-          penalty_18 = 4000;
-          penalty_19 = 1600;
-          penalty_29 = 400;
-          over_18 = 0.05;
-          over_19 = 0.035;
-        } else { // slow5
-          penalty_18 = 2500;
-          penalty_19 = 1250;
-          penalty_29 = 100;
-          over_18 = 0.035;
-          over_19 = 0.025;
-        }
-      } else if (tap_4 <= 8) { // 24
-        penalty_18 = 3200;
-        penalty_19 = 1400;
-        penalty_29 = 300;
-        over_18 = 0.042;
-        over_19 = 0.03;
-      } else if (tap_4 <= 10) { // 20
-        penalty_18 = 2500;
-        penalty_19 = 1100;
-        penalty_29 = 200;
-        over_18 = 0.035;
-        over_19 = 0.025;
-      } else if (tap_4 <= 12) { // 15
-        penalty_18 = 1800;
-        penalty_19 = 800;
-        over_18 = 0.028;
-        over_19 = 0.02;
-      } else if (tap_4 <= 16) { // 12
-        penalty_18 = 1400;
-        penalty_19 = 400;
-        over_18 = 0.024;
-        over_19 = 0.015;
-      } else {
-        penalty_18 = 700;
-        penalty_19 = 100;
-        over_18 = 0.02;
-        over_19 = 0.013;
+      int tap_mode = 0, adj_mode = 0;
+      switch (tap_4) {
+        case 6: tap_mode = tetris.GetTapSequence()[4] <= 10 ? 5 : 6; break;
+        case 8: tap_mode = 4; break;
+        case 9: tap_mode = 3; break;
+        case 12: tap_mode = 2; break;
+        case 15: tap_mode = 1; break;
+        case 18: tap_mode = 0; break;
+        default: throw std::runtime_error("unexpected tap");
       }
+      switch (tetris.GetAdjDelay()) {
+        case 0: adj_mode = 0; break;
+        case 18: adj_mode = 1; break;
+        case 21: adj_mode = 2; break;
+        case 24: adj_mode = 3; break;
+        case 30: adj_mode = 4; break;
+        case 61: adj_mode = 5; break;
+        default: throw std::runtime_error("unexpected adj");
+      }
+      constexpr double kOverProb[][7][6] = { // half survival chance in 100 lines
+        {{0.032,0.029,0.029,0.027,0.027,0.023},
+         {0.039,0.036,0.035,0.036,0.034,0.026},
+         {0.044,0.039,0.038,0.039,0.038,0.028},
+         {0.046,0.041,0.038,0.037,0.038,0.032},
+         {0.044,0.043,0.04 ,0.04 ,0.037,0.031},
+         {0.047,0.042,0.044,0.041,0.039,0.029},
+         {0.042,0.038,0.038,0.037,0.037,0.027}},
+        {{0.021,0.018,0.018,0.017,0.016,0.016},
+         {0.029,0.026,0.024,0.023,0.021,0.02 },
+         {0.035,0.03 ,0.028,0.029,0.024,0.023},
+         {0.045,0.036,0.032,0.033,0.029,0.028},
+         {0.045,0.036,0.035,0.032,0.03 ,0.032},
+         {0.046,0.037,0.04 ,0.036,0.032,0.031},
+         {0.038,0.032,0.029,0.029,0.025,0.023}},
+        {{0.007,0.007,0.007,0.007,0.007,0.007},
+         {0.007,0.007,0.007,0.007,0.007,0.007},
+         {0.01 ,0.009,0.009,0.009,0.009,0.009},
+         {0.02 ,0.015,0.016,0.016,0.016,0.015},
+         {0.027,0.02 ,0.02 ,0.019,0.019,0.019},
+         {0.036,0.024,0.023,0.022,0.024,0.024},
+         {0.014,0.012,0.011,0.011,0.012,0.012}}
+      };
       // aggressive: reduce burn reward for levels capable of consistent tetris
       if (lines != 4 && !(tetris.LevelSpeed() == kLevel39 || (
             tetris.LevelSpeed() == kLevel29 && tetris.GetTapSequence()[3] < 12))) n_reward *= 0.1;
+      int penalty_18 = std::max(kOverProb[0][tap_mode][adj_mode] - 0.01, 0.0) * 60000;
+      int penalty_19 = std::max(kOverProb[1][tap_mode][adj_mode] - 0.01, 0.0) * 30000;
+      int penalty_29 = std::max(kOverProb[2][tap_mode][adj_mode] - 0.01, 0.0) * 15000;
       // give negative reward and random topouts for burning
       int penalty = 0;
       if (lines && lines != 4) {
-        double over_prob = 0;
-        if (now_lines <= 120) penalty += lines * penalty_18, over_prob = over_18;
-        else if (now_lines <= 220) penalty += lines * penalty_19, over_prob = over_19;
-        else if (now_lines <= 314) penalty += lines * penalty_29;
-        double adjusted_over_prob = 1 - std::pow(1 - over_prob, lines * burn_over_multiplier_);
+        double live_prob = 1;
+        for (int i = now_lines - lines; i < now_lines; i++) {
+          if (i <= 124) live_prob *= 1 - kOverProb[0][tap_mode][adj_mode], penalty += penalty_18;
+          else if (i <= 224) live_prob *= 1 - kOverProb[1][tap_mode][adj_mode], penalty += penalty_19;
+          else if (i <= 320) live_prob *= 1 - kOverProb[2][tap_mode][adj_mode], penalty += penalty_29;
+        }
+        double adjusted_over_prob = 1 - std::pow(live_prob, burn_over_multiplier_);
         if (skip_unique_initial_ && std::uniform_real_distribution<float>(0, 1)(rng_) < adjusted_over_prob) {
           tetris.ForceOver();
         }
       }
       // prevent intentional topout by providing game over penalty
       if (tetris.IsOver()) {
-        penalty += penalty_18 * (120 - std::min(120, now_lines));
-        penalty += penalty_19 * (220 - std::min(220, std::max(120, now_lines)));
-        penalty += penalty_29 * (314 - std::min(314, std::max(220, now_lines)));
+        penalty += penalty_18 * (124 - std::min(124, now_lines));
+        penalty += penalty_19 * (224 - std::min(224, std::max(124, now_lines)));
+        penalty += penalty_29 * (320 - std::min(320, std::max(224, now_lines)));
         penalty = penalty * 1.05;
       }
       n_reward -= penalty * kRewardMultiplier_;
