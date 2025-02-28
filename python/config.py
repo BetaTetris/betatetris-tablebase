@@ -39,7 +39,8 @@ class Configs(BaseConfigs):
     clipping_range: float = 0.2
     beta: float = 5.0
     vf_weight: float = FloatDynamicHyperParam(1, range_ = (0, 5))
-    raw_weight: float = FloatDynamicHyperParam(0, range_ = (0, 0.1))
+    raw_weight: float = FloatDynamicHyperParam(0, range_ = (0, 1e-2))
+    raw_avg_weight: float = FloatDynamicHyperParam(0, range_ = (0, 5))
     entropy_weight: float = FloatDynamicHyperParam(1.5e-2, range_ = (0, 5e-2))
     reg_l2: float = FloatDynamicHyperParam(0., range_ = (0, 5e-5))
 

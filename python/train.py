@@ -77,6 +77,7 @@ class Main:
     def set_weight_params(self):
         self.cur_entropy_weight = self.c.entropy_weight()
         self.cur_raw_weight = self.c.raw_weight()
+        self.cur_raw_avg_weight = self.c.raw_avg_weight()
         self.cur_vf_weight = self.c.vf_weight()
 
     def destroy(self):
@@ -200,17 +201,21 @@ class Main:
         raw_reg = 5 * F.softplus(-(raw_dev - 2e-3), beta=500) # penalize negative values
         raw_reg[skip_mask] = 0
         raw_loss = raw_loss.mean() + raw_reg.mean()
+        raw_avg_loss = (samples['raw_values'] - value[1]) ** 2
+        raw_avg_loss[skip_mask] = 0
+        raw_avg_loss = raw_avg_loss.mean()
 
         # we want to maximize $\mathcal{L}^{CLIP+VF+EB}(\theta)$
         # so we take the negative of it as the loss
-        loss = -(policy_reward - self.cur_vf_weight * vf_loss - self.cur_raw_weight * raw_loss + \
-                self.cur_entropy_weight * entropy_bonus)
+        loss = -(policy_reward + self.cur_entropy_weight * entropy_bonus) + \
+               self.cur_vf_weight * vf_loss + self.cur_raw_weight * raw_loss + self.cur_raw_avg_weight * raw_avg_loss
 
         # for monitoring
         clip_fraction = (abs((ratio - 1.0)) > clip_range).to(torch.float).mean()
         tracker.add({'policy_reward': policy_reward,
                      'vf_loss': vf_loss ** 0.5,
                      'raw_loss': raw_loss,
+                     'raw_avg_loss': raw_avg_loss ** 0.5,
                      'entropy_bonus': entropy_bonus,
                      'kl_div': kl_div.mean(),
                      'clip_fraction': clip_fraction})
