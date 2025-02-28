@@ -147,6 +147,7 @@ class Main:
         pi = Categorical(logits=pi)
         raw_dist = Normal(value[1], F.softplus(value[2], beta=1e3).clamp(min=1e-5))
         raw_dev = value[2]
+        raw_avg = value[1]
         value = value[0]
 
         skip_mask = samples['skip_mask']
@@ -201,7 +202,7 @@ class Main:
         raw_reg = 5 * F.softplus(-(raw_dev - 2e-3), beta=500) # penalize negative values
         raw_reg[skip_mask] = 0
         raw_loss = raw_loss.mean() + raw_reg.mean()
-        raw_avg_loss = (samples['raw_values'] - value[1]) ** 2
+        raw_avg_loss = (samples['raw_values'] - raw_avg) ** 2
         raw_avg_loss[skip_mask] = 0
         raw_avg_loss = raw_avg_loss.mean()
 

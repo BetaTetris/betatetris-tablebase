@@ -204,11 +204,12 @@ class DataGenerator:
                 del ret_info[i]
         return samples, ret_info
 
-    def _calc_advantages(self, done: np.ndarray, rewards: np.ndarray, values: torch.Tensor, devs: torch.Tensor) -> torch.Tensor:
+    def _calc_advantages(self, done: np.ndarray, rewards: np.ndarray, pred_values: torch.Tensor, pred_devs: torch.Tensor) -> torch.Tensor:
         """### Calculate advantages"""
         with torch.no_grad():
-            # values: (t, 2, env)
-            # devs: (t, env)
+            # pred_values: (t, 2, env)
+            # pred_devs: (t, env)
+            pred_vars = torch.square(pred_devs)
             # (env, t, 4) -> (t, 4, env)
             rewards = torch.permute(torch.from_numpy(rewards).to(self.device), (1, 2, 0))
             # (env, t, 2) -> (2, t, env)
@@ -226,34 +227,38 @@ class DataGenerator:
 
             # advantages table
             advantages = torch.zeros((self.worker_steps, 2, self.envs), dtype = torch.float32, device = self.device)
-            raw_devs = torch.zeros((self.worker_steps, self.envs), dtype = torch.float32, device = self.device)
+            raw_vars = torch.zeros((self.worker_steps, self.envs), dtype = torch.float32, device = self.device)
             last_advantage = torch.zeros((2, self.envs), dtype = torch.float32, device = self.device)
 
             # $V(s_{t+1})$
             last_value = self.model(self.obs)[1] # (3, env)
-            last_dev = last_value[2]
+            last_var = torch.square(last_value[2])
             last_value = last_value[:2].clone() # remove stdev
             gammas = torch.Tensor([self.gamma, 1.0]).unsqueeze(1).to(self.device)
-            lamdas = torch.Tensor([self.lamda, 1.0]).unsqueeze(1).to(self.device)
 
             for t in reversed(range(self.worker_steps)):
                 done_mask = done_neg[t]
                 soft_done_mask = soft_done[t]
-                last_dev *= done_mask
+                last_var *= done_mask
                 # last_value = last_value * done_mask
                 # last_advantage = last_advantage * done_mask
                 # delta[t] = reward[t] - value[t] + (1 - live[t]) * over[t] + live[t] * last_value * gammas
                 # GAE[t] = delta[t] + live[t] * gamma * lambda * GAE[t+1]
-                last_advantage = (rewards[t] - values[t] + (1.0 - live_probs[t]) * over_rewards[t] +
-                                  live_probs[t] * gammas * (last_value + lamdas * last_advantage) * done_mask)
+                last_ground_value = (rewards[t] + (1.0 - live_probs[t]) * over_rewards[t] +
+                                     live_probs[t] * gammas * (last_value + self.lamda * last_advantage) * done_mask)
+                last_advantage = last_ground_value - pred_values[t]
                 # note that we are collecting in reverse order.
                 advantages[t] = last_advantage
-                raw_devs[t] = last_dev
-                last_value = values[t]
+                raw_vars[t] = last_var
+                # the distribution is a mixture of (lamda: current step) and (1-lamda: value function)
+                mixture_avg = self.lamda * last_ground_value[1] + (1 - self.lamda) * pred_values[t,1]
+                last_var = self.lamda * (last_var + torch.square(last_ground_value[1])) + \
+                           (1 - self.lamda) * (pred_vars[t] + torch.square(pred_values[t,1])) - torch.square(mixture_avg)
                 # soft dones
                 last_advantage[:,soft_done_mask] = 0
-                last_dev[soft_done_mask] = devs[t,soft_done_mask]
-            return advantages, raw_devs, done_torch[1]
+                last_var[soft_done_mask] = pred_vars[t,soft_done_mask]
+                last_value = pred_values[t]
+            return advantages, torch.sqrt(raw_vars), done_torch[1]
 
     def destroy(self):
         try:
