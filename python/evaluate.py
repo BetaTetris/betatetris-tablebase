@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import argparse, sys, queue, csv, re, random, math, socket
+import argparse, sys, queue, csv, re, random, math, socket, os
 import numpy as np, torch
 from torch.distributions import Categorical
 from multiprocessing import Process, Pipe, Queue, shared_memory
@@ -10,6 +10,8 @@ import tetris
 from model import Model, obs_to_torch
 import time
 
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+torch.use_deterministic_algorithms(True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 args = None
 
@@ -174,6 +176,7 @@ class Game:
         LEVELS = [130, 230, 330, 430]
         old_lines = self.env.GetLines()
         old_pieces = self.env.GetPieces()
+        old_run_lines = self.env.GetRunLines()
         r, x, y = action // 200, action // 10 % 20, action % 10
         if direct:
             self.env.DirectPlacement(r, x, y)
@@ -183,8 +186,10 @@ class Game:
         score = self.env.GetRunScore()
         for i in range(4):
             if old_lines < LEVELS[i] <= lines: self.stats[i] = score
-        if args.line_clear_history and lines > old_lines:
-            self.line_clear_hist += str(lines - old_lines)
+        if args.detailed_history and self.env.GetPieces() != old_pieces:
+            self.history += '{}{}{}{}'.format(r, '0123456789abcdefghij'[x], y, lines - old_lines)
+        elif args.line_clear_history and lines > old_lines:
+            self.history += str(lines - old_lines)
         if self.env.IsOver():
             for i in range(4):
                 if LEVELS[i] > lines: self.stats[i] = score
@@ -199,13 +204,13 @@ class Game:
         lst = [self.seed] + self.stats + [self.env.GetLines()]
         if args.keep_lines is not None:
             lst.append(self.env.GetRunLines())
-        if args.line_clear_history:
-            lst.append(self.line_clear_hist)
+        if args.line_clear_history or args.detailed_history:
+            lst.append(self.history)
         return lst
 
     def reset(self, seed, board=None, now=None):
         self.seed = seed
-        self.line_clear_hist = ''
+        self.history = ''
         self.rng.reset(seed)
         if now is None: now = self.rng.spawn()
         nxt = self.rng.spawn()
@@ -216,6 +221,7 @@ class Game:
             reset_args['nnb'] = args.nnb
             reset_args['mirror'] = args.mirror
         else:
+            reset_args['skip_unique_initial'] = True
             reset_args['lines'] = args.start_lines
             reset_args['adj_delay'] = args.adj_delay
             reset_args['tap_sequence'] = TAP_SEQUENCES[args.tap_speed].tolist()
@@ -317,11 +323,12 @@ def worker_process(remote, q_size, offset, seed_queue, shms):
             else:
                 status[:,1] = status[:,0]
 
-            obs = [i.env.GetState() for i in games]
+            need_nn = status[:,1]
+            obs = [games[i].env.GetState() for i in range(q_size) if need_nn[i]]
             obs = tuple(zip(*obs))
             for i in range(len(obs)):
-                obs_np[i][obs_idx] = np.stack(obs[i])
-            remote.send((info, status[:,0], status[:,1]))
+                obs_np[i][obs_idx][need_nn] = np.stack(obs[i])
+            remote.send((info, status[:,0], need_nn))
         elif cmd == "close":
             remote.close()
             return
@@ -367,7 +374,10 @@ def Main(models):
         save_num = 0
 
     random.seed(args.seed)
-    seeds = random.sample(range(512, 2 ** 24) if args.gym_rng else range(2 ** 60), N)
+    if args.seed_file:
+        with open(args.seed_file, 'r') as f: seeds = list(map(int, f))
+    else:
+        seeds = random.sample(range(512, 2 ** 24) if args.gym_rng else range(2 ** 60), N)
     if args.sample_file:
         boards = []
         with open(args.sample_file, 'rb', buffering=1048576) as f:
@@ -410,13 +420,20 @@ def Main(models):
         while True:
             pi_np = np.zeros(args.batch_size, dtype='int')
             if np.any(need_nn):
-                obs_torch = obs_to_torch([i[need_nn] for i in obs_np])
+                M = need_nn.sum()
+                need_nn_ind = np.nonzero(need_nn)[0]
+                M = len(need_nn_ind)
+                if M > 64 and M % 64 != 0:
+                    # do not change batch size too frequently
+                    C = min(args.batch_size, (M + 63) // 64 * 64)
+                    need_nn_ind = np.concatenate((need_nn_ind, np.zeros(C-M, dtype='int')))
+                obs_torch = obs_to_torch([i[need_nn_ind] for i in obs_np])
                 pi = torch.stack([model(obs_torch, pi_only=True)[0] for model in models]).mean(0)
                 if args.sample_action:
                     pi = Categorical(logits=pi*0.75).sample()
                 else:
                     pi = torch.argmax(pi, 1)
-                pi_np[need_nn] = pi.view(-1).cpu().numpy()
+                pi_np[need_nn] = pi.view(-1).cpu().numpy()[:M]
 
             for i in range(args.workers):
                 workers[i].child.send(('step', pi_np[i*q_size:(i+1)*q_size]))
@@ -481,7 +498,9 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output', type=str)
     parser.add_argument('-s', '--server', type=str)
     parser.add_argument('--line-clear-history', action='store_true')
+    parser.add_argument('--detailed-history', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--seed-file', type=str)
     parser.add_argument('--gym-rng', action='store_true')
     parser.add_argument('--realistic-rng', action='store_true')
     parser.add_argument('--clean-only', action='store_true')
