@@ -185,12 +185,12 @@ void SimulateMove(
 
 void MoveSearch(
     const std::vector<ByteBoard>& b, Level level, const int taps[],
-    int start_rot, int start_col, int start_frame, int end_frame,
+    int max_lr, int max_ab, int start_rot, int start_col, int start_frame, int end_frame,
     bool check_tuck, const std::set<Position>& non_tuck,
     std::vector<Position>& locked_placements, std::vector<std::pair<Position, int>>* continue_placements) {
   if (!b[start_rot][GetRow(start_frame, level)][start_col]) return;
-  for (int lr = 0; lr <= 9; lr++) {
-    for (int ab = 0; ab <= 2; ab++) {
+  for (int lr = 0; lr <= max_lr; lr++) {
+    for (int ab = 0; ab <= max_ab; ab++) {
       SimulateMove(b, level, taps, start_rot, start_col, start_frame, end_frame, lr, ab, false, false, check_tuck, non_tuck, locked_placements, continue_placements);
       SimulateMove(b, level, taps, start_rot, start_col, start_frame, end_frame, lr, ab, true, false, check_tuck, non_tuck, locked_placements, continue_placements);
       SimulateMove(b, level, taps, start_rot, start_col, start_frame, end_frame, lr, ab, false, true, check_tuck, non_tuck, locked_placements, continue_placements);
@@ -326,17 +326,19 @@ PossibleMoves NaiveGetPossibleMoves(const std::vector<ByteBoard>& b, Level level
   std::set<Position> non_tuck_set;
   std::vector<std::pair<Position, int>> adj_starts;
 
-  MoveSearch(b, level, taps, 0, 5, 0, kFinish, false, non_tuck_set, non_tuck, nullptr);
+  int max_lr = adj_frame == 0 ? 0 : 9;
+  int max_ab = adj_frame == 0 ? 0 : 2;
+  MoveSearch(b, level, taps, max_lr, max_ab, 0, 5, 0, kFinish, false, non_tuck_set, non_tuck, nullptr);
   non_tuck_set = std::set<Position>(non_tuck.begin(), non_tuck.end());
-  MoveSearch(b, level, taps, 0, 5, 0, adj_frame, true, non_tuck_set, ret.non_adj, &adj_starts);
+  MoveSearch(b, level, taps, max_lr, max_ab, 0, 5, 0, adj_frame, true, non_tuck_set, ret.non_adj, &adj_starts);
 
   for (auto& i : adj_starts) {
     non_tuck.clear();
     non_tuck_set.clear();
     ret.adj.push_back({i.first, {}});
-    MoveSearch(b, level, taps, i.first.r, i.first.y, i.second, kFinish, false, non_tuck_set, non_tuck, nullptr);
+    MoveSearch(b, level, taps, 9, 2, i.first.r, i.first.y, i.second, kFinish, false, non_tuck_set, non_tuck, nullptr);
     non_tuck_set = std::set<Position>(non_tuck.begin(), non_tuck.end());
-    MoveSearch(b, level, taps, i.first.r, i.first.y, i.second, kFinish, true, non_tuck_set, ret.adj.back().second, nullptr);
+    MoveSearch(b, level, taps, 9, 2, i.first.r, i.first.y, i.second, kFinish, true, non_tuck_set, ret.adj.back().second, nullptr);
   }
   return ret;
 }
