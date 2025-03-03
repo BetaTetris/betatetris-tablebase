@@ -6,14 +6,28 @@ from scipy.special import softmax
 
 import tetris
 
+TAP_SEQUENCE_MAP = {
+    '30hz': np.arange(10) * 2,
+    '24hz': np.array([0, 3, 5, 8, 10, 13, 15, 18, 20, 23]),
+    '20hz': np.arange(10) * 3,
+    '15hz': np.arange(10) * 4,
+    '12hz': np.arange(10) * 5,
+    '10hz': np.arange(10) * 6,
+    'slow5': np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
+}
+AGGRESSION_LEVEL_MAP = {
+    'high': 0,
+    'mid': 1,
+    'low': 2,
+}
 TAP_SEQUENCES = [
-    np.arange(10) * 2,
-    np.array([0, 3, 5, 8, 10, 13, 15, 18, 20, 23]),
-    np.arange(10) * 3,
-    np.arange(10) * 4,
-    np.arange(10) * 5,
-    np.arange(10) * 6,
-    np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
+    TAP_SEQUENCE_MAP['30hz'],
+    TAP_SEQUENCE_MAP['24hz'],
+    TAP_SEQUENCE_MAP['20hz'],
+    TAP_SEQUENCE_MAP['15hz'],
+    TAP_SEQUENCE_MAP['12hz'],
+    TAP_SEQUENCE_MAP['10hz'],
+    TAP_SEQUENCE_MAP['slow5'],
 ]
 ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
 BUCKET_INTERVAL = 5

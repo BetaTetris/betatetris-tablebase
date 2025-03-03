@@ -8,6 +8,7 @@ from multiprocessing import Process, Pipe, Queue, shared_memory
 import tetris
 
 from model import Model, obs_to_torch
+from game_param import TAP_SEQUENCE_MAP, AGGRESSION_LEVEL_MAP, ADJ_DELAYS
 import time
 
 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
@@ -149,23 +150,6 @@ class RNGRealistic:
         return self.prev
 
 
-TAP_SEQUENCES = {
-    '30hz': np.arange(10) * 2,
-    '24hz': np.array([0, 3, 5, 8, 10, 13, 15, 18, 20, 23]),
-    '20hz': np.arange(10) * 3,
-    '15hz': np.arange(10) * 4,
-    '12hz': np.arange(10) * 5,
-    '10hz': np.arange(10) * 6,
-    'slow5': np.array([0, 2, 4, 6, 18, 20, 22, 24, 36, 38]),
-}
-ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
-AGGRESSION_LEVELS = {
-    'high': 0,
-    'mid': 1,
-    'low': 2,
-}
-
-
 class Game:
     def __init__(self):
         self.env = tetris.Tetris()
@@ -224,8 +208,8 @@ class Game:
             reset_args['skip_unique_initial'] = True
             reset_args['lines'] = args.start_lines
             reset_args['adj_delay'] = args.adj_delay
-            reset_args['tap_sequence'] = TAP_SEQUENCES[args.tap_speed].tolist()
-            reset_args['step_reward_level'] = AGGRESSION_LEVELS[args.aggression]
+            reset_args['tap_sequence'] = TAP_SEQUENCE_MAP[args.tap_speed].tolist()
+            reset_args['step_reward_level'] = AGGRESSION_LEVEL_MAP[args.aggression]
             if board:
                 reset_args['board'] = board
         self.env.Reset(now, nxt, **reset_args)
@@ -489,8 +473,8 @@ if __name__ == "__main__":
     else:
         parser.add_argument('-l', '--start-lines', type=int, default=0)
         parser.add_argument('--adj-delay', type=int, default=18, choices=ADJ_DELAYS)
-        parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCES))
-        parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVELS))
+        parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCE_MAP))
+        parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVEL_MAP))
     parser.add_argument('-m', '--max-lines', type=int)
     parser.add_argument('--keep-lines', type=int)
     parser.add_argument('-b', '--batch-size', type=int, default=512)

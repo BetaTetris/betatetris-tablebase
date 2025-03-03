@@ -4,7 +4,7 @@ from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 import numpy
 
-sources = ['board.cpp', 'tetris.cpp', 'module.cpp', '../../src/tetris.cpp']
+sources = ['board.cpp', 'tetris.cpp', 'module.cpp', '../../src/tetris.cpp', '../../src/frame_sequence.cpp']
 
 class build_ext_ex(build_ext):
     extra_compile_args = {

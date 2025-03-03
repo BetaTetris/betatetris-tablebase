@@ -6,6 +6,7 @@ import curses
 
 import tetris
 from model import Model, obs_to_torch
+from game_param import TAP_SEQUENCE_MAP, AGGRESSION_LEVEL_MAP, ADJ_DELAYS
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 stdscr = None
@@ -303,8 +304,8 @@ class GameConn(socketserver.BaseRequestHandler):
                         reset_args = {
                             'lines': self.start_lines(),
                             'adj_delay': args.adj_delay,
-                            'tap_sequence': TAP_SEQUENCES[args.tap_speed].tolist(),
-                            'step_reward_level': AGGRESSION_LEVELS[args.aggression],
+                            'tap_sequence': TAP_SEQUENCE_MAP[args.tap_speed].tolist(),
+                            'step_reward_level': AGGRESSION_LEVEL_MAP[args.aggression],
                         }
                     self.game.Reset(cur, nxt, **reset_args)
                     myprint('New game', self.start_level, (cur, nxt))
@@ -361,8 +362,8 @@ if __name__ == "__main__":
         parser.add_argument('--no-cap', action='store_true')
         parser.add_argument('--no-2ks', action='store_true')
         parser.add_argument('--adj-delay', type=int, default=18, choices=ADJ_DELAYS)
-        parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCES))
-        parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVELS))
+        parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCE_MAP))
+        parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVEL_MAP))
         parser.add_argument('-s', '--server', type=str)
         parser.add_argument('--threshold-file', type=str)
         parser.add_argument('--ratio-low', type=float, default=0.01)
@@ -376,7 +377,7 @@ if __name__ == "__main__":
             thresholds = list(map(float, f.read().split()))
 
     with torch.no_grad():
-        state_dict = torch.load(args.model)
+        state_dict = torch.load(args.model, weights_only=True)
         channels = state_dict['main_start.0.main.0.weight'].shape[0]
         start_blocks = len([0 for i in state_dict if re.fullmatch(r'main_start.*main\.0\.weight', i)])
         end_blocks = len([0 for i in state_dict if re.fullmatch(r'main_end.*main\.0\.weight', i)])
