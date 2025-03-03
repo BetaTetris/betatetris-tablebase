@@ -60,22 +60,8 @@ class GameConn(socketserver.BaseRequestHandler):
             else:
                 return (action // 200, action // 10 % 20, action % 10), v[1].item()
 
-    @staticmethod
-    def strat_text(strat, cur_piece, val=None):
-        PIECE_TABLE = 'TJZOSLI'
-        ROT_TABLE = ['dlur', 'dlur', ['',''], [''], ['', ''], 'dlur', ['', '']]
-        COL_TABLE = [[(-1,2),(-1,1),(-1,2),(0,2)],
-                        [(-1,2),(-1,1),(-1,2),(0,2)],
-                        [(-1,2),(0,2)],
-                        [(-1,1)],
-                        [(-1,2),(0,2)],
-                        [(-1,2),(-1,1),(-1,2),(0,2)],
-                        [(-2,2),(0,1)]]
-        r,x,y = strat
-        ori = PIECE_TABLE[cur_piece] + ROT_TABLE[cur_piece][r] + '-'
-        for j in range(*COL_TABLE[cur_piece][r]):
-            ori += str(j + y + 1)[-1]
-        ntxt = f'{ori:6s}@row {20-x:2d}'
+    def strat_text(self, strat, val=None):
+        ntxt = '{:8s}'.format(self.game.GetBoard().PlacementNotation(self.game.GetNowPiece(), *strat))
         if val is not None:
             ntxt += f'; val {val:6.3f}'
         return ntxt
@@ -88,7 +74,7 @@ class GameConn(socketserver.BaseRequestHandler):
         txt += 'Tablebase' if is_table else 'Neural Net'
         txt += '\nPlacements: (where to place\n the upcoming piece based on\n its next piece)\n'
         for i in range(7):
-            txt += 'TJZOSLI'[i] + ': ' + self.strat_text(strats[i], self.game.GetNowPiece(), None if is_table else data[i]) + '\n'
+            txt += 'TJZOSLI'[i] + ': ' + self.strat_text(strats[i], None if is_table else data[i]) + '\n'
         if is_table:
             txt += f'confidence {data}'
             if thresholds:

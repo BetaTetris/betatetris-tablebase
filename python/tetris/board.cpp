@@ -1,4 +1,5 @@
 #include "board.h"
+#include "piece.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define NO_IMPORT_ARRAY
@@ -72,6 +73,18 @@ PyObject* Board_Height(PythonBoard* self, PyObject* Py_UNUSED(ignored)) {
   return PyLong_FromLong(self->board.Height());
 }
 
+PyObject* Board_PlacementNotation(PythonBoard* self, PyObject* args, PyObject* kwds) {
+  static const char* kwlist[] = {"piece", "rotate", "x", "y", nullptr};
+  PyObject* piece_obj;
+  int r, x, y;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "Oiii", (char**)kwlist, &piece_obj, &r, &x, &y)) {
+    return nullptr;
+  }
+  int piece = ParsePieceID(piece_obj);
+  if (piece < 0) return nullptr;
+  return PyUnicode_FromString(self->board.PlacementNotation(piece, r, x, y).c_str());
+}
+
 PyObject* Board_GetBytes(PyObject* obj) {
   CompactBoard board = reinterpret_cast<PythonBoard*>(obj)->board.ToBytes();
   return PyBytes_FromStringAndSize(reinterpret_cast<const char*>(board.data()), board.size());
@@ -87,6 +100,7 @@ PyMethodDef py_board_class_methods[] = {
     {"Count", (PyCFunction)Board_Count, METH_NOARGS, "Get cell count"},
     {"Height", (PyCFunction)Board_Height, METH_NOARGS, "Get board height"},
     {"GetBytes", (PyCFunction)Board_GetBytes, METH_NOARGS, "Get 25-byte representation"},
+    {"PlacementNotation", (PyCFunction)Board_PlacementNotation, METH_VARARGS | METH_KEYWORDS, "Get notation of a placement"},
     {nullptr}};
 } // namespace
 

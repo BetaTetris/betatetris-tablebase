@@ -644,6 +644,12 @@ class alignas(32) Board {
     return *this;
   }
 
+  constexpr Board operator~() const {
+    Board r = {~b1, ~b2, ~b3, ~b4};
+    r.Normalize();
+    return r;
+  }
+
   std::string ToString(bool invert = false, bool compact = true, bool row_numbers = true) const {
     Board obj = invert ? ~*this : *this;
     uint64_t p = obj.b1 & obj.b2 & obj.b3 & (obj.b4 | ~(uint64_t)kColumnMask);
@@ -666,10 +672,31 @@ class alignas(32) Board {
     return ret;
   }
 
-  constexpr Board operator~() const {
-    Board r = {~b1, ~b2, ~b3, ~b4};
-    r.Normalize();
-    return r;
+  std::string PlacementNotation(int piece, int r, int x, int y) const {
+    static constexpr int kColOffsets[7][4][2] = {
+      {{-1,2},{-1,1},{-1,2},{0,2}},
+      {{-1,2},{-1,1},{-1,2},{0,2}},
+      {{-1,2},{0,2}},
+      {{-1,1}},
+      {{-1,2},{0,2}},
+      {{-1,2},{-1,1},{-1,2},{0,2}},
+      {{-2,2},{0,1}}
+    };
+    static constexpr char kRotMarks[7][5] = {
+      "dlur", "dlur", "--", "-", "--", "dlur", "--"
+    };
+    std::string ret{"TJZOSLI"[piece]};
+    ret += kRotMarks[piece][r];
+    if (kRotMarks[piece][r] != '-') ret += '-';
+    for (int i = y + kColOffsets[piece][r][0]; i < y + kColOffsets[piece][r][1]; i++) {
+      ret += '0' + (i + 1) % 10;
+    }
+    uint32_t col = PieceMap(piece)[r].Column(y);
+    col = col & ~(col >> 1);
+    if (col >> x & 1) {
+      ret += std::string(popcount(col & ((1 << x) - 1)), '*');
+    }
+    return ret;
   }
 
   static const Board Zeros;
