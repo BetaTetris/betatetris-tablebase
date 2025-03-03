@@ -199,18 +199,16 @@ class Tetris {
   }
 
   FrameSequence GetSequence(const Position& pos) const {
-    // TODO
-    return GetFrameSequenceStart<TAP_SPEED>(board_, LevelSpeed(), now_piece_, adj_delay_, pos);
+    return GetFrameSequenceStart(LevelSpeed(), tap_sequence_.data(), board_, now_piece_, adj_delay_, pos);
   }
 
   std::pair<Position, FrameSequence> GetAdjPremove(const Position pos[7]) const {
-    // TODO
-    auto [idx, seq] = GetBestAdj<TAP_SPEED>(board_, LevelSpeed(), now_piece_, moves_, adj_delay_, pos);
+    auto [idx, seq] = GetBestAdj(LevelSpeed(), tap_sequence_.data(), board_, now_piece_, moves_, adj_delay_, pos);
     return {moves_.adj[idx].first, seq};
   }
 
   void FinishAdjSequence(FrameSequence& seq, const Position& intermediate_pos, const Position& final_pos) const {
-    GetFrameSequenceAdj<TAP_SPEED>(seq, board_, LevelSpeed(), now_piece_, intermediate_pos, final_pos);
+    GetFrameSequenceAdj(LevelSpeed(), tap_sequence_.data(), seq, board_, now_piece_, intermediate_pos, final_pos);
   }
 
   void SetNextPiece(int piece) {
@@ -234,7 +232,7 @@ class Tetris {
   uint64_t GetInitialMask() const { return initial_mask_; }
   const Board& GetBoard() const { return board_; }
   const int* GetTapSequence() const { return tap_sequence_.data(); }
-  const int GetAdjDelay() const { return adj_delay_; }
+  int GetAdjDelay() const { return adj_delay_; }
 
   int GetLevel() const { return GetLevelByLines(lines_); }
   Level LevelSpeed() const { return GetLevelSpeed(GetLevel()); }

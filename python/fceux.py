@@ -52,12 +52,12 @@ class GameConn(socketserver.BaseRequestHandler):
 
     def get_strat(self):
         with torch.no_grad():
-            pi, v = self.model(obs_to_torch(self.game.GetState()), pi_only=True)
+            pi, v = self.model(obs_to_torch(self.game.GetState()))
             action = torch.argmax(pi, 1).item()
             if is_noro:
                 return (action // 200, action // 10 % 20, action % 10), v[0].item() * 5
             else:
-                return (action // 200, action // 10 % 20, action % 10), v[0].item()
+                return (action // 200, action // 10 % 20, action % 10), v[1].item()
 
     @staticmethod
     def strat_text(strat, cur_piece, val=None):
@@ -104,10 +104,10 @@ class GameConn(socketserver.BaseRequestHandler):
 
     def get_adj_strat(self, pos):
         with torch.no_grad():
-            pi, v = self.model(obs_to_torch(self.game.GetAdjStates(*pos)), pi_only=True)
+            pi, v = self.model(obs_to_torch(self.game.GetAdjStates(*pos)))
             actions = torch.argmax(pi, 1).flatten().cpu().tolist()
             strats = [(action // 200, action // 10 % 20, action % 10) for action in actions]
-            self.print_status(strats, False, v[0].flatten().cpu().tolist())
+            self.print_status(strats, False, v[1].flatten().cpu().tolist())
             return strats
 
     def print_status_noro(self, strat, v, refresh=True):
@@ -300,7 +300,12 @@ class GameConn(socketserver.BaseRequestHandler):
                         self.num_19 += int(self.game.GetLines() >= 130)
                         self.num_29 += int(self.game.GetLines() >= 230)
                         self.games += 1
-                        reset_args = {'lines': self.start_lines()}
+                        reset_args = {
+                            'lines': self.start_lines(),
+                            'adj_delay': args.adj_delay,
+                            'tap_sequence': TAP_SEQUENCES[args.tap_speed].tolist(),
+                            'step_reward_level': AGGRESSION_LEVELS[args.aggression],
+                        }
                     self.game.Reset(cur, nxt, **reset_args)
                     myprint('New game', self.start_level, (cur, nxt))
                     if is_noro:
@@ -355,6 +360,9 @@ if __name__ == "__main__":
     else:
         parser.add_argument('--no-cap', action='store_true')
         parser.add_argument('--no-2ks', action='store_true')
+        parser.add_argument('--adj-delay', type=int, default=18, choices=ADJ_DELAYS)
+        parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCES))
+        parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVELS))
         parser.add_argument('-s', '--server', type=str)
         parser.add_argument('--threshold-file', type=str)
         parser.add_argument('--ratio-low', type=float, default=0.01)
@@ -385,7 +393,7 @@ if __name__ == "__main__":
         board_conn = None
 
     # load GPU first to reduce lag
-    model(obs_to_torch(tetris.Tetris().GetState()), pi_only=True)
+    model(obs_to_torch(tetris.Tetris().GetState()))
 
     if args.use_curses:
         stdscr = curses.initscr()
