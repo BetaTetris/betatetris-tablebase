@@ -5,12 +5,15 @@ import argparse
 
 import numpy as np
 import torch
-import onnx
+from torch.export import Dim
 from torch.distributions import Categorical, kl_divergence
+import onnx
 
 from model import Model, obs_to_torch
 from tetris import Tetris
 from game_param import TAP_SEQUENCE_MAP
+
+ARG_NAMES = ['board', 'meta', 'moves', 'move_meta', 'meta_int']
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.backends.cudnn.benchmark = True
@@ -36,24 +39,32 @@ with torch.no_grad():
 
     model = Model(start_blocks, end_blocks, channels).to(device)
     model.load_state_dict(state_dict)
-    model = torch.compile(model)
     model.eval()
-    orig_value = model(torch_state)
+    orig_value = model(torch_state, onnx=True)
 
     if not args.no_export:
-        onnx_program = torch.onnx.dynamo_export(model, torch_state, export_options=torch.onnx.ExportOptions(dynamic_shapes=True))
-        onnx_program.save(args.output)
+        program = torch.onnx.export(
+                model, (torch_state,), kwargs={'onnx': True},
+                f=args.output,
+                external_data=False,
+                input_names=ARG_NAMES,
+                output_names=['pi', 'pi_rank', 'v'],
+                optimize=True,
+                dynamo=True,
+                dynamic_shapes=([{0: Dim('batch', max=2048)} for _ in ARG_NAMES], None),
+                )
+        assert program.model_proto.graph.input[0].type.tensor_type.shape.dim[0].dim_param
 
 from onnxruntime import InferenceSession
 
 print('Verifying consistency')
 sess = InferenceSession(args.output)
 onnx_value = sess.run(None, {
-    f'l_args_0_{x}_': state[x] for x in range(len(state))
+    i: state[x] for x, i in enumerate(ARG_NAMES)
 })
-pi_orig = Categorical(logits=orig_value[0])
-pi_onnx = Categorical(logits=torch.Tensor(onnx_value[0]).to(device))
+pi_orig = Categorical(probs=orig_value[0])
+pi_onnx = Categorical(probs=torch.Tensor(onnx_value[0]).to(device))
 pi_diff = np.nan_to_num(np.abs(orig_value[0].cpu().numpy() - onnx_value[0]))
-value_diff = np.abs(orig_value[1].cpu().numpy() - onnx_value[1])
+value_diff = np.abs(orig_value[2].cpu().numpy() - onnx_value[2])
 print(f'pi diff max: {pi_diff.max()}, rms: {np.sqrt(np.mean(np.square(pi_diff)))}, kl_div: {kl_divergence(pi_orig, pi_onnx).mean().item()}')
 print(f'value diff max: {value_diff.max(axis=1)}, rms: {np.sqrt(np.mean(np.square(value_diff), axis=1))}')

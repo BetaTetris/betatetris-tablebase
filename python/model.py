@@ -1,5 +1,6 @@
 import torch, numpy as np
 from torch import nn, autocast
+from torch.nn import functional as F
 from torch.distributions import Categorical
 
 import tetris
@@ -76,7 +77,7 @@ class PiValueHead(nn.Module):
 
     @autocast(device_type=device, enabled=False)
     def forward(self, pi, value, invalid, multiplier):
-        pi = pi.float()
+        pi = pi.float().clone()
         pi[invalid] = -float('inf')
         v = self.linear(value.float())
         v = v.transpose(0, 1) * multiplier
@@ -124,7 +125,7 @@ class Model(nn.Module):
         return self.evdev_final.evdev_coeff(x)
 
     @autocast(device_type=device)
-    def forward(self, obs, categorical=False, pi_only=False, evdev_only=False):
+    def forward(self, obs, categorical=False, pi_only=False, evdev_only=False, onnx=False):
         assert not (pi_only and evdev_only)
         board, board_meta, moves, moves_meta, meta_int = obs
         batch = board.shape[0]
@@ -154,7 +155,12 @@ class Model(nn.Module):
                 torch.exp(moves_meta[:,-1]) if kR == 1 else 1
             )
             if categorical: pi = Categorical(logits=pi)
-        return pi, torch.concat([v, evdev])
+        v = torch.concat([v, evdev])
+        if onnx:
+            pi_rank = torch.argsort(pi, dim=1, descending=True)
+            pi = F.softmax(pi, dim=1)
+            return pi, pi_rank, v
+        return pi, v
 
 def obs_to_torch(obs, device=None):
     if device is None:
