@@ -56,6 +56,25 @@ FrameSequence GetFrameSequenceNoro(
 
 std::pair<Position, bool> SimulateMove(Level level, const Board& b, int piece, const FrameSequence& seq, bool until_lock);
 
+struct AdjInfor {
+  size_t index;
+  int pre_taps;
+  std::vector<std::pair<float, int>> taps; // (prob, num_taps)
+  FrameSequence seq;
+};
+
+std::vector<AdjInfor> GetAdjTaps(
+    Level level, const int taps[], const Board& b, int piece,
+    const PossibleMoves& moves, int adj_delay, const Position adjs[kPieces]);
+
+enum class BestAdjMode {
+  kWeightedTaps,
+  kPreAdjTaps,
+  kWorstTaps,
+  kAdjProb
+};
+
+std::pair<size_t, FrameSequence> GetBestAdj(const std::vector<AdjInfor>& infor, BestAdjMode mode);
 std::pair<size_t, FrameSequence> GetBestAdj(
-    Level level, const int taps[],
-    const Board& b, int piece, const PossibleMoves& moves, int adj_delay, const Position adjs[kPieces]);
+    Level level, const int taps[], const Board& b, int piece,
+    const PossibleMoves& moves, int adj_delay, const Position adjs[kPieces], BestAdjMode mode = BestAdjMode::kWeightedTaps);

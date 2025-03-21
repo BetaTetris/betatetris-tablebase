@@ -430,9 +430,9 @@ struct Counter {
 
 } // namespace
 
-std::pair<size_t, FrameSequence> GetBestAdj(
-    Level level, const int taps[],
-    const Board& b, int piece, const PossibleMoves& moves, int adj_delay, const Position adjs[kPieces]) {
+std::vector<AdjInfor> GetAdjTaps(
+    Level level, const int taps[], const Board& b, int piece,
+    const PossibleMoves& moves, int adj_delay, const Position adjs[kPieces]) {
   std::vector<Position> uniq_pos(adjs, adjs + kPieces);
   std::sort(uniq_pos.begin(), uniq_pos.end());
   uniq_pos.resize(std::unique(uniq_pos.begin(), uniq_pos.end()) - uniq_pos.begin());
@@ -442,9 +442,7 @@ std::pair<size_t, FrameSequence> GetBestAdj(
       if (uniq_pos[j] == adjs[i]) probs[j] += kTransitionProb[piece][i];
     }
   }
-  size_t ret = 0;
-  float mn = 1e5;
-  FrameSequence ret_seq;
+  std::vector<AdjInfor> ret;
   for (size_t i = 0; i < moves.adj.size(); i++) {
     {
       Counter c;
@@ -459,16 +457,47 @@ std::pair<size_t, FrameSequence> GetBestAdj(
       if (j.IsA() || j.IsB()) pre_taps++;
       if (j.IsL() || j.IsR()) pre_taps++;
     }
-    float weight = pre_taps * (1. / 32);
+    AdjInfor infor;
+    infor.index = i;
+    infor.pre_taps = pre_taps;
     for (size_t j = 0; j < uniq_pos.size(); j++) {
       int num_taps = GetFrameSequenceAdj<false>(level, taps, seq, b, piece, moves.adj[i].first, uniq_pos[j]);
-      weight += probs[j] * (num_taps * num_taps);
+      infor.taps.push_back({probs[j], num_taps});
     }
-    if (weight < mn) {
-      mn = weight;
-      ret = i;
-      ret_seq.swap(seq);
-    }
+    infor.seq = std::move(seq);
+    ret.push_back(std::move(infor));
   }
-  return {ret, ret_seq};
+  return ret;
+}
+
+std::pair<size_t, FrameSequence> GetBestAdj(const std::vector<AdjInfor>& infor, BestAdjMode mode) {
+  size_t index = 0;
+  std::tuple<float, float, float, float> mn = {1e9, 0, 0, 0};
+  for (size_t i = 0; i < infor.size(); i++) {
+    float weight = 0;
+    int tap_mx = 0;
+    float adj_prob = 0;
+    for (auto& [prob, taps] : infor[i].taps) {
+      weight += prob * (taps * taps);
+      tap_mx = std::max(tap_mx, taps);
+      if (taps > 0) adj_prob += prob;
+    }
+    float pre_taps = infor[i].pre_taps;
+    std::tuple<float, float, float, float> val;
+    switch (mode) {
+      case BestAdjMode::kWeightedTaps: val = {weight, (float)tap_mx, pre_taps, adj_prob}; break;
+      case BestAdjMode::kPreAdjTaps: val = {pre_taps, (float)tap_mx, weight, adj_prob}; break;
+      case BestAdjMode::kWorstTaps: val = {(float)tap_mx, pre_taps, weight, adj_prob}; break;
+      case BestAdjMode::kAdjProb: val = {adj_prob, (float)tap_mx, pre_taps, weight}; break;
+      default: unreachable();
+    }
+    if (val < mn) mn = val, index = i;
+  }
+  return {index, infor[index].seq};
+}
+
+std::pair<size_t, FrameSequence> GetBestAdj(
+    Level level, const int taps[], const Board& b, int piece,
+    const PossibleMoves& moves, int adj_delay, const Position adjs[kPieces], BestAdjMode mode) {
+  return GetBestAdj(GetAdjTaps(level, taps, b, piece, moves, adj_delay, adjs), mode);
 }
