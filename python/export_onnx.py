@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import os
+os.environ['ONNX_EXPORT'] = '1'
 import re
 import argparse
 
@@ -9,6 +11,7 @@ from torch.export import Dim
 from torch.distributions import Categorical, kl_divergence
 import onnx
 
+import model
 from model import Model, obs_to_torch
 from tetris import Tetris
 from game_param import TAP_SEQUENCE_MAP
@@ -33,6 +36,8 @@ torch_state = obs_to_torch(state)
 
 with torch.no_grad():
     state_dict = torch.load(args.model, weights_only=True, map_location=device)
+    for i in list(state_dict):
+        if 'num_batches_tracked' in i: del state_dict[i]
     channels = state_dict['main_start.0.main.0.weight'].shape[0]
     start_blocks = len([0 for i in state_dict if re.fullmatch(r'main_start.*main\.0\.weight', i)])
     end_blocks = len([0 for i in state_dict if re.fullmatch(r'main_end.*main\.0\.weight', i)])
@@ -40,9 +45,11 @@ with torch.no_grad():
     model = Model(start_blocks, end_blocks, channels).to(device)
     model.load_state_dict(state_dict)
     model.eval()
-    orig_value = model(torch_state, onnx=True)
+    with torch.autocast(device_type='cuda'):
+        orig_value = model(torch_state, onnx=True)
 
     if not args.no_export:
+        model = model.float()
         program = torch.onnx.export(
                 model, (torch_state,), kwargs={'onnx': True},
                 f=args.output,
@@ -53,6 +60,7 @@ with torch.no_grad():
                 dynamo=True,
                 dynamic_shapes=([{0: Dim('batch', max=2048)} for _ in ARG_NAMES], None),
                 )
+        # print(onnx.helper.printable_graph(program.model_proto.graph))
         assert program.model_proto.graph.input[0].type.tensor_type.shape.dim[0].dim_param
 
 from onnxruntime import InferenceSession
