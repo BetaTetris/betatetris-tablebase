@@ -4,6 +4,8 @@
 <img src="https://raw.githubusercontent.com/adrien1018/betatetris-tablebase/main/icon.png" alt="" width="200"/>
 </p>
 
+You can now try the neural network of BetaTetris on [BetaTetris Playground](https://fractal161.github.io/btpg/)!
+
 BetaTetris Tablebase is an NES Tetris agent incorporating a tablebase to brute-force optimal moves on a predefined set of boards. It also contains a hybrid agent that merges the tablebase approach with the previously established [neural-net-based BetaTetris](https://github.com/adrien1018/beta-tetris).
 
 This is the BetaTetris version featured in [Tetris Friendlies Revolution 2023](https://www.twitch.tv/videos/2017761942?t=02h36m25s).
