@@ -8,7 +8,7 @@ You can now try the neural network of BetaTetris on [BetaTetris Playground](http
 
 BetaTetris Tablebase is an NES Tetris agent incorporating a tablebase to brute-force optimal moves on a predefined set of boards. It also contains a hybrid agent that merges the tablebase approach with the previously established [neural-net-based BetaTetris](https://github.com/adrien1018/beta-tetris).
 
-This is the BetaTetris version featured in [Tetris Friendlies Revolution 2023](https://www.twitch.tv/videos/2017761942?t=02h36m25s).
+This is the BetaTetris version featured in [Tetris Friendlies Revolution 2023](https://www.youtube.com/watch?v=ZeCa5FYaJ3I), and is also the version that achieves [the first AI rebirth](https://www.youtube.com/watch?v=yBOfsnBQ5i0).
 
 ## Table of Contents
 
@@ -30,9 +30,17 @@ Although this version differs from the original Tetris game, by using enough boa
 The agent featured in Tetris Friendlies Revolution 2023 used approximately 3.5 billion boards gathered in millions of games played by previous BetaTetris versions. With such a large set of boards, the tablebase outperforms any previous BetaTetris versions in pre-29 play. However, it falls short after killscreen where digs are more likely to happen.
 Consequently, a hybrid approach is used: before level 37, if the expected score calculated by the tablebase exceeds a certain threshold, the tablebase decides the placement; otherwise, the decision is made by the neural network. After level 37, the neural network has the full control.
 
-This agent is capable of playing at any tap speed, reaction time, and line cap, though currently I only trained an agent playing on 30 Hz, 300 ms reaction time and level 49 line cap, which is the format used in Tetris Friendlies Revolution 2023. For additional insights, you may view the [introduction video](https://www.twitch.tv/videos/2017475671?t=02h43m18s) from Tetris Friendlies Revolution 2023.
+This agent is capable of playing at any tap speed, reaction time, and line cap. For additional insights, you may view the [introduction video](https://youtu.be/ZeCa5FYaJ3I?t=1038) from Tetris Friendlies Revolution 2023.
 
 ## Statistics
+
+### Newest NN model (v1.0.0)
+
+This is a newly-trained model which supports multiple tap speeds, reaction times and aggression levels, and significantly outperforms the previous version. See the [statistics page](https://betatetris.github.io/btpg/stats/) in [btpg](https://betatetris.github.io/btpg/) for its statistics.
+
+### Old NN model & tablebase (v0.1.0)
+
+This is the agent used in [Tetris Friendlies Revolution 2023](https://www.youtube.com/watch?v=ZeCa5FYaJ3I), and the version that achieves [the first AI rebirth](https://www.youtube.com/watch?v=yBOfsnBQ5i0). It uses a smaller NN model which only supports 30 Hz, 300 ms reaction time. A 3.5-billion-board tablebase is used.
 
 These statistics were collected through simulations of the agents playing on 2000 (tablebase, NN) or 1100 (hybrid) randomly-selected TetrisGYMv5 seeds. The format is 30 Hz, 300 ms reaction time, level 39 double killscreen and level 49 line cap.
 
@@ -149,9 +157,9 @@ Next, proceed to `python/tetris/` to build the C++ extension:
 python setup.py build_ext --inplace
 ```
 
-With these steps completed, the NN is ready for use! Return to `python/` and start the FCEUX server:
+With these steps completed, the NN is ready for use! First, download the model from the [Release page](https://github.com/BetaTetris/betatetris-tablebase/releases). Then, return to `python/` and start the FCEUX server:
 ```bash
-python fceux.py models/30hz-18f.pth
+python fceux.py --tap-speed=30hz --adj-delay=21 --aggression=low [path-to-model]
 ```
 
 Finally, open FCEUX and run the Lua script in the `lua/` directory to watch the NN in action!
