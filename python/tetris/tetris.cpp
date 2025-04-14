@@ -155,6 +155,16 @@ PyObject* Tetris_SetLines(PythonTetris* self, PyObject* args, PyObject* kwds) {
   }
 }
 
+PyObject* Tetris_SetAggression(PythonTetris* self, PyObject* args, PyObject* kwds) {
+  static const char* kwlist[] = {"aggression", nullptr};
+  int level;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "i", (char**)kwlist, &level)) {
+    return nullptr;
+  }
+  self->SetStepReward(level);
+  Py_RETURN_NONE;
+}
+
 PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {
     "now_piece", "next_piece", "lines", "board",
@@ -534,6 +544,8 @@ PyMethodDef py_tetris_class_methods[] = {
      "Set the next piece"},
     {"SetLines", (PyCFunction)Tetris_SetLines, METH_VARARGS | METH_KEYWORDS,
      "Set lines"},
+    {"SetAggression", (PyCFunction)Tetris_SetAggression, METH_VARARGS | METH_KEYWORDS,
+     "Set aggression"},
     {"Reset", (PyCFunction)Tetris_Reset, METH_VARARGS | METH_KEYWORDS,
      "Reset game and assign pieces randomly"},
     {"ResetRandom", (PyCFunction)Tetris_ResetRandom, METH_VARARGS | METH_KEYWORDS,

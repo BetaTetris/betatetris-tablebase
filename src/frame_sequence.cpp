@@ -493,7 +493,7 @@ std::pair<size_t, FrameSequence> GetBestAdj(const std::vector<AdjInfor>& infor, 
     }
     if (val < mn) mn = val, index = i;
   }
-  return {index, infor[index].seq};
+  return {infor[index].index, infor[index].seq};
 }
 
 std::pair<size_t, FrameSequence> GetBestAdj(
