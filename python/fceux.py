@@ -291,7 +291,7 @@ class GameConn(socketserver.BaseRequestHandler):
                             'lines': self.start_lines(),
                             'adj_delay': args.adj_delay,
                             'tap_sequence': TAP_SEQUENCE_MAP[args.tap_speed].tolist(),
-                            'step_reward_level': AGGRESSION_LEVEL_MAP[args.aggression],
+                            'aggression_level': AGGRESSION_LEVEL_MAP[args.aggression],
                         }
                     self.game.Reset(cur, nxt, **reset_args)
                     myprint('New game', self.start_level, (cur, nxt))

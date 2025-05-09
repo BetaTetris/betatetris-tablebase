@@ -20,6 +20,11 @@ class TapTable {
   constexpr int operator[](int x) const { return t[x]; }
   constexpr int* data() { return t; }
   constexpr const int* data() const { return t; }
+  constexpr std::array<int, 10> toarray() const {
+    std::array<int, 10> ret;
+    for (int i = 0; i < 10; i++) ret[i] = t[i];
+    return ret;
+  }
 };
 
 template <class T> struct IsTapTable : std::false_type {};

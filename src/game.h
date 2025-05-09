@@ -11,9 +11,9 @@ constexpr int kLevels = 4;
 #ifdef LINE_CAP
 constexpr int kLineCap = LINE_CAP;
 #else
-constexpr int kLineCap = 390;
-#ifndef TESTING
-#warning "Line cap not defined. Setting to 390."
+constexpr int kLineCap = 430;
+#if !defined(TESTING) && !defined(NO_ROTATION)
+#warning "Line cap not defined. Setting to 430."
 #endif
 #endif
 
@@ -25,8 +25,10 @@ constexpr bool kDoubleTuckAllowed = false;
 
 #ifdef TETRIS_ONLY
 constexpr int kGroups = 10;
+constexpr bool kTetrisOnly = true;
 #else
 constexpr int kGroups = 5;
+constexpr bool kTetrisOnly = false;
 #endif
 
 enum Level {
@@ -179,11 +181,15 @@ constexpr auto GetLevelSpeedByLines(int lines) {
   return GetLevelSpeed(GetLevelByLines(lines));
 }
 
+constexpr int GameScore(int base_lines, int lines) {
+  return ScoreFromLevel(GetLevelByLines(base_lines + lines), lines);
+}
+
 constexpr int Score(int base_lines, int lines) {
 #ifdef TETRIS_ONLY
   return base_lines < kLineCap && base_lines + lines >= kLineCap;
 #else
-  return ScoreFromLevel(GetLevelByLines(base_lines + lines), lines);
+  return GameScore(base_lines, lines);
 #endif // TETRIS_ONLY
 }
 

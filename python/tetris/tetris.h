@@ -19,22 +19,18 @@ class PythonTetris {
   static constexpr double kInvalidReward_ = -0.3;
 #ifdef NO_ROTATION
   static constexpr double kRawMultiplier_ = 0.2;
-  double step_reward_ = 2e-3;
-#else // NO_ROTATION
-#ifdef TETRIS_ONLY
-  static constexpr double kRewardMultiplier_ = 2e-5; // 20 per maxout
-  static constexpr double kBottomMultiplier_ = 1.1;
-  static constexpr double kGameOverMultiplier_ = 1. / 16;
-  static constexpr double kGameOverReward = -1.0;
-  double step_reward_ = 5e-3;
-#else // TETRIS_ONLY
+  static constexpr double kStepReward_ = 2e-3;
+#elif defined(TETRIS_ONLY)
+  static constexpr double kRewardPerTetris_ = 0.25; // 0.25 per tetris
+  static constexpr double kBottomMultiplier_ = 2.0;
+  static constexpr double kStepReward_ = 2e-3;
+#else // normal
   static constexpr double kRewardMultiplier_ = 1e-5; // 10 per maxout
   static constexpr double kBottomMultiplier_ = 1.1;
-  double step_reward_ = 5e-4;
-#endif // TETRIS_ONLY
-  int step_reward_level_ = 0;
+  int aggression_level_ = 0; // 0-2, 0 is high aggression and 2 is low
   double burn_over_multiplier_ = 0;
-#endif // NO_ROTATION
+  double step_reward_ = 5e-4;
+#endif
 
   // states
   std::mt19937_64 rng_;
@@ -48,20 +44,8 @@ class PythonTetris {
 #endif // NO_ROTATION
 
   int GenNextPiece_(int piece) {
-#ifdef TETRIS_ONLY
-    // generate more I pieces when training tetris only
-    constexpr int kThresh[4] = {28, 24, 16, 8};
-    constexpr double kAdd[4] = {0.035, 0.046, 0.06, 0.09};
-    int level_int = static_cast<int>(tetris.LevelSpeed());
-    int threshold = kThresh[level_int];
-    double add = kAdd[level_int];
-    if (tetris.RunLines() >= threshold) {
-      float prob = add * 0.3 + add * 0.7 * std::min((tetris.RunLines() - threshold) / (threshold * 0.5), 1.0);
-      if (std::uniform_real_distribution<float>(0, 1)(rng_) < prob) return 6;
-    }
-#endif // TETRIS_ONLY
+#ifdef USE_PIECE_COUNT_RNG
     piece_count_ = (piece_count_ + 1) & 7;
-#if false // use realistic distribution or not
     return std::discrete_distribution<int>(
         kTransitionRealisticProbInt[piece_count_][piece],
         kTransitionRealisticProbInt[piece_count_][piece] + kPieces)(rng_);
@@ -74,23 +58,36 @@ class PythonTetris {
 
   Reward StepAndCalculateReward_(const Position& pos, int score, int lines) {
     if (score == -1) return {kInvalidReward_, 0.0, 1.0, 0.0};
+
+    // Generate next piece
+#ifdef NO_ROTATION
+    next_piece_ = GenNextPiece_(next_piece_);
+#else
+    if (!tetris.IsAdj()) next_piece_ = GenNextPiece_(next_piece_);
+#endif
+
+    // Reward calculation
     Reward ret = {0.0, 0.0, 1.0, 0.0};
 #ifdef NO_ROTATION
+    ret.raw_reward = lines * kRawMultiplier_;
     int pre_lines = tetris.GetLines() - lines;
-    ret.reward = step_reward_;
+    ret.reward = kStepReward_;
     for (int i = pre_lines; i < pre_lines + lines; i++) {
       ret.reward += std::exp(GetNoroLineRewardExp(i, tetris.GetStartLevel(), tetris.DoTuck(), nnb_));
     }
-    next_piece_ = GenNextPiece_(next_piece_);
-    ret.raw_reward = lines * kRawMultiplier_;
     return ret;
-#else // NO_ROTATION
+#elif defined(TETRIS_ONLY)
+    ret.raw_reward = lines == 4 ? kRewardPerTetris_ : 0;
+    ret.reward = ret.raw_reward + kStepReward_;
+    if (lines == 4 && pos.x >= 18) ret.reward *= kBottomMultiplier_;
+    return ret;
+#else // normal
     ret.raw_reward = score * kRewardMultiplier_;
     ret.reward = ret.raw_reward;
-    double n_step_reward = step_reward_;
     double bottom_multiplier = kBottomMultiplier_;
     int tap_4 = tetris.GetTapSequence()[3];
-    if (step_reward_level_ == 0) {
+    if (aggression_level_ == 0) {
+      // aggro; assign over probability for burns
       int now_lines = tetris.GetLines();
       int tap_mode = 0, adj_mode = 0;
       switch (tap_4) {
@@ -160,69 +157,63 @@ class PythonTetris {
         }
         ret.live_prob = std::pow(ret.live_prob, burn_over_multiplier_);
       }
-      n_step_reward = 0;
     } else {
+      double n_step_reward = step_reward_;
       double multiplier_18 = 1, multiplier_19 = 1, multiplier_29 = 1, multiplier_39 = 1;
       bool no_scale_29 = false, no_scale_39 = false;
       int now_pieces = tetris.GetPieces();
       if (tap_4 <= 6) { // 30
-        multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
-        multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
+        multiplier_18 = aggression_level_ == 2 ? 0.2 : 0.0;
+        multiplier_19 = aggression_level_ == 2 ? 0.2 : 0.0;
         if (tetris.GetTapSequence()[4] <= 10) {
-          multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.2;
+          multiplier_29 = aggression_level_ == 2 ? 1.0 : 0.2;
         } else {
-          multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.4;
+          multiplier_29 = aggression_level_ == 2 ? 1.0 : 0.4;
         }
-        no_scale_39 = step_reward_level_ == 2;
-        if (now_pieces <= 330 * 10 / 4) multiplier_39 = step_reward_level_ == 2 ? 1.5 : 2.5;
+        no_scale_39 = aggression_level_ == 2;
+        if (now_pieces <= 330 * 10 / 4) multiplier_39 = aggression_level_ == 2 ? 1.5 : 2.5;
       } else if (tap_4 <= 8) { // 24
-        multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
-        multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
-        multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.3;
-        no_scale_39 = step_reward_level_ == 2;
+        multiplier_18 = aggression_level_ == 2 ? 0.2 : 0.0;
+        multiplier_19 = aggression_level_ == 2 ? 0.2 : 0.0;
+        multiplier_29 = aggression_level_ == 2 ? 1.0 : 0.3;
+        no_scale_39 = aggression_level_ == 2;
       } else if (tap_4 <= 10) { // 20
-        multiplier_18 = step_reward_level_ == 2 ? 0.2 : 0.0;
-        multiplier_19 = step_reward_level_ == 2 ? 0.2 : 0.0;
-        multiplier_29 = step_reward_level_ == 2 ? 1.0 : 0.5;
+        multiplier_18 = aggression_level_ == 2 ? 0.2 : 0.0;
+        multiplier_19 = aggression_level_ == 2 ? 0.2 : 0.0;
+        multiplier_29 = aggression_level_ == 2 ? 1.0 : 0.5;
       } else if (tap_4 <= 12) { // 15
-        multiplier_18 = step_reward_level_ == 2 ? 0.25 : 0.0;
-        multiplier_19 = step_reward_level_ == 2 ? 0.3 : 0.0;
-        no_scale_29 = step_reward_level_ == 2;
-        if (now_pieces <= 230 * 10 / 4) multiplier_29 = step_reward_level_ == 2 ? 1.5 : 2.5;
+        multiplier_18 = aggression_level_ == 2 ? 0.25 : 0.0;
+        multiplier_19 = aggression_level_ == 2 ? 0.3 : 0.0;
+        no_scale_29 = aggression_level_ == 2;
+        if (now_pieces <= 230 * 10 / 4) multiplier_29 = aggression_level_ == 2 ? 1.5 : 2.5;
       } else if (tap_4 <= 16) { // 12
-        multiplier_18 = step_reward_level_ == 2 ? 0.35 : 0.0;
-        multiplier_19 = step_reward_level_ == 2 ? 0.5 : 0.1;
-        no_scale_29 = step_reward_level_ == 2;
+        multiplier_18 = aggression_level_ == 2 ? 0.35 : 0.0;
+        multiplier_19 = aggression_level_ == 2 ? 0.5 : 0.1;
+        no_scale_29 = aggression_level_ == 2;
       } else {
-        multiplier_18 = step_reward_level_ == 2 ? 0.4 : 0.0;
-        multiplier_19 = step_reward_level_ == 2 ? 0.7 : 0.2;
+        multiplier_18 = aggression_level_ == 2 ? 0.4 : 0.0;
+        multiplier_19 = aggression_level_ == 2 ? 0.7 : 0.2;
       }
       if (now_pieces <= 120 * 10 / 4) n_step_reward *= multiplier_18;
       else if (now_pieces <= 220 * 10 / 4) n_step_reward *= multiplier_19;
       else if (now_pieces <= 314 * 10 / 4) n_step_reward *= multiplier_29;
       else n_step_reward *= multiplier_39;
-      // scale reward to avoid large step reward get higher
+      // line out
       if ((no_scale_39 && tetris.LevelSpeed() == kLevel39) ||
           (no_scale_29 && (tetris.LevelSpeed() == kLevel29 || tetris.LevelSpeed() == kLevel39))) {
         ret.reward = ScoreFromLevel(tetris.GetLevel(), 1) * lines * kRewardMultiplier_;
         bottom_multiplier = 1.0;
+        n_step_reward = 0;
       }
+      // scale reward to avoid large step reward get higher overall reward
       ret.reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + n_step_reward);
+      if (!tetris.IsAdj()) { // add & scale step reward
+        ret.reward += n_step_reward * (tetris.GetLevel() + 1) / 30;
+      }
     }
     if (lines == 4 && pos.x >= 18) ret.reward *= bottom_multiplier;
-    if (!tetris.IsAdj()) {
-      next_piece_ = GenNextPiece_(next_piece_);
-      // scale step reward
-      ret.reward += n_step_reward * (tetris.GetLevel() + 1) / 30;
-    }
-#ifdef TETRIS_ONLY
-    if (lines && lines != 4) {
-      ret.reward *= kGameOverMultiplier_;
-    }
-    if (tetris.IsOver()) ret.reward += kGameOverReward;
-#endif // TETRIS_ONLY
     return ret;
-#endif // NO_ROTATION
+#endif
   }
 
 #ifndef NO_ROTATION
@@ -240,21 +231,17 @@ class PythonTetris {
  public:
 #ifdef NO_ROTATION
   TetrisNoro tetris;
-#else
-  Tetris tetris;
-#endif // NO_ROTATION
 
-  PythonTetris(size_t seed) : rng_(seed) {
-    piece_count_ = 0;
-#ifdef NO_ROTATION
+  PythonTetris(size_t seed) : rng_(seed), piece_count_(0) {
     Reset(Board::Ones, 0, 0, true, false, false);
-#else
-    Reset(Board::Ones, 0);
-#endif // NO_ROTATION
+  }
+
+  Position GetRealPosition(Position pos) {
+    if (is_mirror_) pos.y = kMirrorCols_[tetris.NowPiece()] - pos.y;
+    return pos;
   }
 
   void ResetRandom(const Board& b) {
-#ifdef NO_ROTATION
     int start_level = std::discrete_distribution<int>({
         15, 1, 1, 1, 2, 2, 2, 2, 4, 6, // 0-9
         4, 0, 0, 4, 0, 0, 4, 0, 0, // 10-18
@@ -265,21 +252,8 @@ class PythonTetris {
                          std::discrete_distribution<int>({1, 1})(rng_);
     bool is_mirror = std::discrete_distribution({1, 1})(rng_);
     Reset(b, 0, start_level, do_tuck, nnb, is_mirror);
-#else
-    int lines = b.Count() % 4 != 0;
-    lines += std::uniform_int_distribution<int>(0, kLineCap / 2 - 1)(rng_) * 2;
-    Reset(b, lines, -1, -1, true);
-#endif // NO_ROTATION
   }
 
-  Position GetRealPosition(Position pos) {
-#ifdef NO_ROTATION
-    if (is_mirror_) pos.y = kMirrorCols_[tetris.NowPiece()] - pos.y;
-#endif // NO_ROTATION
-    return pos;
-  }
-
-#ifdef NO_ROTATION
   void Reset(const Board& b, int lines, int start_level, bool do_tuck, bool nnb, bool is_mirror,
              int now_piece = -1, int next_piece = -1) {
     if (now_piece == -1 || next_piece == -1) {
@@ -292,7 +266,16 @@ class PythonTetris {
     tetris.Reset(b, lines, start_level, do_tuck, now_piece, next_piece);
     next_piece_ = GenNextPiece_(next_piece);
   }
-#else // NO_ROTATION
+#else // !NO_ROTATION
+  Tetris tetris;
+
+  PythonTetris(size_t seed) : rng_(seed), piece_count_(0) {
+    constexpr Tap30Hz taps;
+    Reset(Board::Ones, 0, taps.data(), 18);
+  }
+
+  Position GetRealPosition(Position pos) { return pos; }
+
   void Reset(const Board& b, int lines, const int tap_sequence[], int adj_delay,
              int now_piece = -1, int next_piece = -1, bool skip_unique_initial = false) {
     if (now_piece == -1 || next_piece == -1) {
@@ -306,28 +289,24 @@ class PythonTetris {
     CheckReducibleInitial_();
   }
 
-  void Reset(const Board& b, int lines,
-             int now_piece = -1, int next_piece = -1, bool skip_unique_initial = false) {
-    constexpr TAP_SPEED tap_table;
-    Reset(b, lines, tap_table.data(), ADJ_DELAY, now_piece, next_piece, skip_unique_initial);
-  }
-
   Reward DirectPlacement(const Position& pos) {
     Position npos = GetRealPosition(pos);
     auto [score, lines] = tetris.DirectPlacement(npos, next_piece_);
     return StepAndCalculateReward_(npos, score, lines);
   }
 
-  void SetStepReward(int level) {
+#ifndef TETRIS_ONLY
+  void SetAggression(int level) {
     int score = level == 0 ? 0 : level == 1 ? 800 : 2400;
     step_reward_ = score * kRewardMultiplier_;
-    step_reward_level_ = level;
+    aggression_level_ = level;
   }
 
   void SetBurnOverMultiplier(double mul) {
     burn_over_multiplier_ = mul;
   }
-#endif // NO_ROTATION
+#endif // !TETRIS_ONLY
+#endif // !NO_ROTATION
 
   Reward InputPlacement(const Position& pos) {
     Position npos = GetRealPosition(pos);
@@ -343,23 +322,36 @@ class PythonTetris {
 #endif
   }
 
-  struct State {
+  /// State generation
 #ifdef NO_ROTATION
+  struct State {
     std::array<std::array<std::array<float, 10>, 20>, 2> board;
     std::array<float, 32> meta;
     std::array<std::array<std::array<float, 10>, 20>, 3> moves;
     std::array<float, 31> move_meta;
     std::array<int, 2> meta_int;
-#else
+  };
+
+  void GetState(State& state, int line_reduce = 0) const {
+    PythonTetris::GetState(tetris, state, nnb_, is_mirror_, line_reduce);
+  }
+#else // !NO_ROTATION
+  struct State {
     std::array<std::array<std::array<float, 10>, 20>, 6> board;
     std::array<float, 32> meta;
     std::array<std::array<std::array<float, 10>, 20>, 18> moves;
     std::array<float, 28> move_meta;
     std::array<int, 2> meta_int;
-#endif
   };
 
-#ifndef NO_ROTATION
+  void GetState(State& state, int line_reduce = 0) const {
+#ifdef TETRIS_ONLY
+    PythonTetris::GetState(tetris, state, line_reduce);
+#else
+    PythonTetris::GetState(tetris, state, line_reduce, aggression_level_);
+#endif
+  }
+
   void GetAdjStates(const Position& pos, State states[kPieces]) const {
     if (tetris.IsAdj()) throw std::logic_error("should only called on non adj phase");
     Tetris n_tetris = tetris;
@@ -371,16 +363,6 @@ class PythonTetris {
     }
   }
 #endif // !NO_ROTATION
-
-#ifdef NO_ROTATION
-  void GetState(State& state, int line_reduce = 0) const {
-    PythonTetris::GetState(tetris, state, nnb_, is_mirror_, line_reduce);
-  }
-#else // NO_ROTATION
-  void GetState(State& state, int line_reduce = 0) const {
-    PythonTetris::GetState(tetris, state, line_reduce, step_reward_level_);
-  }
-#endif // NO_ROTATION
 
   static double GetNoroLineRewardExp(int lines, int start_level, bool do_tuck, bool nnb) {
     constexpr int kOffset[2][2][15] = {

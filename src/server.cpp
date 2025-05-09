@@ -8,6 +8,7 @@
 #pragma GCC diagnostic ignored "-Wdangling-reference"
 #include <spdlog/spdlog.h>
 #pragma GCC diagnostic pop
+#include "game.h"
 #include "move.h"
 #include "play.h"
 #include "config.h"

@@ -209,7 +209,7 @@ class Game:
             reset_args['lines'] = args.start_lines
             reset_args['adj_delay'] = args.adj_delay
             reset_args['tap_sequence'] = TAP_SEQUENCE_MAP[args.tap_speed].tolist()
-            reset_args['step_reward_level'] = AGGRESSION_LEVEL_MAP[args.aggression]
+            reset_args['aggression_level'] = AGGRESSION_LEVEL_MAP[args.aggression]
             if board:
                 reset_args['board'] = board
         self.env.Reset(now, nxt, **reset_args)

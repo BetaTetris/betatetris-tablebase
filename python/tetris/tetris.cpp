@@ -155,15 +155,17 @@ PyObject* Tetris_SetLines(PythonTetris* self, PyObject* args, PyObject* kwds) {
   }
 }
 
+#if !defined(TETRIS_ONLY) && !defined(NO_ROTATION)
 PyObject* Tetris_SetAggression(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"aggression", nullptr};
   int level;
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "i", (char**)kwlist, &level)) {
     return nullptr;
   }
-  self->SetStepReward(level);
+  self->SetAggression(level);
   Py_RETURN_NONE;
 }
+#endif
 
 PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {
@@ -171,7 +173,7 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
 #ifdef NO_ROTATION
     "start_level", "do_tuck", "nnb", "mirror",
 #else
-    "burn_over_multiplier", "step_reward_level", "tap_sequence", "adj_delay", "skip_unique_initial",
+    "burn_over_multiplier", "aggression_level", "tap_sequence", "adj_delay", "skip_unique_initial",
 #endif
     nullptr
   };
@@ -190,12 +192,12 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
 #else
   std::vector<int> tap_sequence;
   PyObject* tap_sequence_obj = nullptr;
-  int adj_delay = ADJ_DELAY;
+  int adj_delay = 18;
   double burn_over_multiplier = 0;
-  int step_reward_level = 0;
+  int aggression_level = 0;
   int skip_unique_initial = 0;
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOiOdiOip", (char**)kwlist,
-        &now_obj, &next_obj, &lines, &board_obj, &burn_over_multiplier, &step_reward_level,
+        &now_obj, &next_obj, &lines, &board_obj, &burn_over_multiplier, &aggression_level,
         &tap_sequence_obj, &adj_delay, &skip_unique_initial)) {
     return nullptr;
   }
@@ -203,7 +205,7 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
     if (tap_sequence_obj) {
       tap_sequence = GetArray(tap_sequence_obj);
     } else {
-      constexpr TAP_SPEED tap_table;
+      constexpr Tap30Hz tap_table;
       tap_sequence = std::vector<int>(tap_table.data(), tap_table.data() + 10);
     }
     if (tap_sequence.size() != 10) throw std::invalid_argument("Length should be 10");
@@ -227,16 +229,18 @@ PyObject* Tetris_Reset(PythonTetris* self, PyObject* args, PyObject* kwds) {
   }
 #ifdef NO_ROTATION
   self->Reset(board, lines, start_level, do_tuck, nnb, mirror, now_piece, next_piece);
+#elif defined(TETRIS_ONLY)
+  self->Reset(board, lines, tap_sequence.data(), adj_delay, now_piece, next_piece, skip_unique_initial);
 #else
   self->Reset(board, lines, tap_sequence.data(), adj_delay, now_piece, next_piece, skip_unique_initial);
-  self->SetStepReward(step_reward_level);
+  self->SetAggression(aggression_level);
   self->SetBurnOverMultiplier(burn_over_multiplier);
 #endif
   Py_RETURN_NONE;
 }
 
-PyObject* Tetris_ResetRandom(PythonTetris* self, PyObject* args, PyObject* kwds) {
 #ifdef NO_ROTATION
+PyObject* Tetris_ResetRandom(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {
     "params", "board",
     nullptr
@@ -253,26 +257,9 @@ PyObject* Tetris_ResetRandom(PythonTetris* self, PyObject* args, PyObject* kwds)
   } else {
     self->Reset(board, 0, start_level, do_tuck, nnb, mirror);
   }
-#else // NO_ROTATION
-  static const char* kwlist[] = {
-    "lines", "board",
-    nullptr
-  };
-  int lines = -1;
-  Board board = Board::Ones;
-  PyObject* board_obj = nullptr;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|iO", (char**)kwlist, &lines, &board_obj)) {
-    return nullptr;
-  }
-  if (!CheckBoard(board, board_obj)) return nullptr;
-  if (lines == -1) {
-    self->ResetRandom(board);
-  } else {
-    self->Reset(board, lines);
-  }
-#endif // NO_ROTATION
   Py_RETURN_NONE;
 }
+#endif // NO_ROTATION
 
 PyObject* Tetris_GetState(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"line_reduce", nullptr};
@@ -512,7 +499,6 @@ PyObject* Tetris_GetRunPieces(PythonTetris* self, PyObject* Py_UNUSED(ignored)) 
   return PyLong_FromLong(self->tetris.RunPieces());
 }
 
-#ifdef NO_ROTATION
 PyObject* Tetris_GetRealPosition(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"pos", nullptr};
   Position pos;
@@ -521,7 +507,6 @@ PyObject* Tetris_GetRealPosition(PythonTetris* self, PyObject* args, PyObject* k
   }
   return PositionToTuple(self->GetRealPosition(pos));
 }
-#endif // NO_ROTATION
 
 PyObject* Tetris_IsNoro(PythonTetris* self, PyObject* Py_UNUSED(ignored)) {
 #ifdef NO_ROTATION
@@ -529,6 +514,14 @@ PyObject* Tetris_IsNoro(PythonTetris* self, PyObject* Py_UNUSED(ignored)) {
 #else
   return PyBool_FromLong(0);
 #endif // NO_ROTATION
+}
+
+PyObject* Tetris_IsTetrisOnly(PythonTetris* self, PyObject* Py_UNUSED(ignored)) {
+  return PyBool_FromLong((int)kTetrisOnly);
+}
+
+PyObject* Tetris_LineCap(PythonTetris* self, PyObject* Py_UNUSED(ignored)) {
+  return PyLong_FromLong(kLineCap);
 }
 
 PyMethodDef py_tetris_class_methods[] = {
@@ -544,25 +537,27 @@ PyMethodDef py_tetris_class_methods[] = {
      "Set the next piece"},
     {"SetLines", (PyCFunction)Tetris_SetLines, METH_VARARGS | METH_KEYWORDS,
      "Set lines"},
+#if !defined(TETRIS_ONLY) && !defined(NO_ROTATION)
     {"SetAggression", (PyCFunction)Tetris_SetAggression, METH_VARARGS | METH_KEYWORDS,
      "Set aggression"},
+#endif // !TETRIS_ONLY && !NO_ROTATION
     {"Reset", (PyCFunction)Tetris_Reset, METH_VARARGS | METH_KEYWORDS,
      "Reset game and assign pieces randomly"},
+#ifdef NO_ROTATION
     {"ResetRandom", (PyCFunction)Tetris_ResetRandom, METH_VARARGS | METH_KEYWORDS,
      "Reset game and assign pieces randomly"},
+#endif // !NO_ROTATION
     {"GetState", (PyCFunction)Tetris_GetState, METH_VARARGS | METH_KEYWORDS,
      "Get state tuple"},
     {"StateShapes", (PyCFunction)Tetris_StateShapes, METH_NOARGS | METH_STATIC,
      "Get shapes of state array (static)"},
-#ifndef NO_ROTATION
-    {"GetAdjStates", (PyCFunction)Tetris_GetAdjStates, METH_VARARGS | METH_KEYWORDS,
-     "Get state tuple for every possible next piece"},
-#endif // !NO_ROTATION
     {"StateTypes", (PyCFunction)Tetris_StateTypes, METH_NOARGS | METH_STATIC,
      "Get types of state array (static)"},
     {"GetSequence", (PyCFunction)Tetris_GetSequence, METH_VARARGS | METH_KEYWORDS,
      "Get frame sequence to a particular position"},
 #ifndef NO_ROTATION
+    {"GetAdjStates", (PyCFunction)Tetris_GetAdjStates, METH_VARARGS | METH_KEYWORDS,
+     "Get state tuple for every possible next piece"},
     {"IsAdjMove", (PyCFunction)Tetris_IsAdjMove, METH_VARARGS | METH_KEYWORDS,
      "Check if a move can have adjustments"},
     {"IsNoAdjMove", (PyCFunction)Tetris_IsNoAdjMove, METH_VARARGS | METH_KEYWORDS,
@@ -572,6 +567,8 @@ PyMethodDef py_tetris_class_methods[] = {
     {"FinishAdjSequence", (PyCFunction)Tetris_FinishAdjSequence, METH_VARARGS | METH_KEYWORDS,
      "Finish a pre-adjustment sequence"},
 #endif // !NO_ROTATION
+    {"GetRealPosition", (PyCFunction)Tetris_GetRealPosition, METH_VARARGS | METH_KEYWORDS,
+     "Get real (possibly mirrored) position"},
     {"GetBoard", (PyCFunction)Tetris_GetBoard, METH_NOARGS, "Get board object"},
     {"GetLines", (PyCFunction)Tetris_GetLines, METH_NOARGS, "Get total lines"},
     {"GetPieces", (PyCFunction)Tetris_GetPieces, METH_NOARGS, "Get total pieces"},
@@ -580,11 +577,9 @@ PyMethodDef py_tetris_class_methods[] = {
     {"GetRunScore", (PyCFunction)Tetris_GetRunScore, METH_NOARGS, "Get score of this run"},
     {"GetRunLines", (PyCFunction)Tetris_GetRunLines, METH_NOARGS, "Get lines of this run"},
     {"GetRunPieces", (PyCFunction)Tetris_GetRunPieces, METH_NOARGS, "Get pieces of this run"},
-#ifdef NO_ROTATION
-    {"GetRealPosition", (PyCFunction)Tetris_GetRealPosition, METH_VARARGS | METH_KEYWORDS,
-     "Get real (possibly mirrored) position"},
-#endif // NO_ROTATION
     {"IsNoro", (PyCFunction)Tetris_IsNoro, METH_NOARGS | METH_STATIC, "Check if noro flag is on"},
+    {"IsTetrisOnly", (PyCFunction)Tetris_IsTetrisOnly, METH_NOARGS | METH_STATIC, "Check if tetris only flag is on"},
+    {"LineCap", (PyCFunction)Tetris_LineCap, METH_NOARGS | METH_STATIC, "Get line cap"},
     {nullptr}};
 
 } // namespace

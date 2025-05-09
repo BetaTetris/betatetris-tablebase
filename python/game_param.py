@@ -17,6 +17,8 @@ TAP_SEQUENCE_MAP = {
 }
 AGGRESSION_LEVEL_MAP = {
     'high': 0,
+} if tetris.Tetris.IsTetrisOnly() else {
+    'high': 0,
     'mid': 1,
     'low': 2,
 }
@@ -31,7 +33,7 @@ TAP_SEQUENCES = [
 ]
 ADJ_DELAYS = [0, 18, 21, 24, 30, 61]
 BUCKET_INTERVAL = 5
-BUCKETS = 425 // BUCKET_INTERVAL
+BUCKETS = tetris.Tetris.LineCap() // BUCKET_INTERVAL - 1
 LEVEL_LINES = [0, 130, 230, 330, 430]
 
 class GameParamManager:
@@ -41,7 +43,7 @@ class GameParamManager:
         self.total_cnt = 0
         self.board_cnt = 0
         self.board_short_cnt = 0
-        self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), 3, BUCKETS), dtype='int64')
+        self.param_count = np.zeros((len(TAP_SEQUENCES), len(ADJ_DELAYS), len(AGGRESSION_LEVEL_MAP), BUCKETS), dtype='int64')
         #self.param_count = np.load('cnt.npz')['arr_0']
         self.burn_over_multiplier = 0.0
         self.board_ratio = 0.0
@@ -61,14 +63,14 @@ class GameParamManager:
 
     def UpdateState(self, params, pieces: int, lines: int):
         self.total_cnt += pieces
-        if params.get('board'):
+        if params.get('is_board'):
             self.board_cnt += pieces
             if params['is_short']:
                 self.board_short_cnt += pieces
 
         start_bucket = min(params['lines'] // BUCKET_INTERVAL, BUCKETS)
         end_bucket = min((params['lines'] + lines) // BUCKET_INTERVAL + 1, BUCKETS)
-        self.param_count[params['tap_id'], params['adj_delay_id'], params['step_reward_level'], start_bucket:end_bucket] += 1
+        self.param_count[params['tap_id'], params['adj_delay_id'], params['aggression_level'], start_bucket:end_bucket] += 1
 
     def GetNewParam(self):
         while True:
@@ -77,8 +79,13 @@ class GameParamManager:
             bucket_start = LEVEL_LINES[data[2]] // BUCKET_INTERVAL
             bucket_end = LEVEL_LINES[data[2] + 1] // BUCKET_INTERVAL
             params = self._SampleDistribution(data[4], bucket_start, bucket_end)
-            return {'now_piece': data[1], 'board': data[0], 'is_short': data[3], **params}
-        return self._SampleDistribution()
+            return {'now_piece': data[1], 'is_board': True, 'board': data[0], 'is_short': data[3], **params}
+        ret = self._SampleDistribution()
+        if tetris.Tetris.IsTetrisOnly() and self.rng.random() < 0.3:
+            col = self.rng.integers(8)
+            board_str = '.' * col + 'xx' + '.' * (8 - col)
+            ret['board'] = tetris.Board(board_str)
+        return ret
 
     def _SampleDistribution(self, cells: int = 0, bucket_start: int = 0, bucket_end: int = BUCKETS):
         n_count = np.array(self.param_count, dtype='float32')
@@ -102,13 +109,13 @@ class GameParamManager:
         if bucket_end < BUCKETS: n_count[:,:,:,bucket_end:] = np.inf
         n_prob = softmax(-n_count * 1.0)
         c = self.rng.choice(n_prob.size, p=n_prob.flatten())
-        tap_id, adj_delay_id, step_reward_level, bucket = np.unravel_index(c, n_prob.shape)
+        tap_id, adj_delay_id, aggression_level, bucket = np.unravel_index(c, n_prob.shape)
         start_lines = bucket * BUCKET_INTERVAL
         if (start_lines % 2 != 0) != (cells % 4 != 0): start_lines += 1
         lines = self.rng.choice(np.arange(start_lines, (bucket + 1) * BUCKET_INTERVAL, 2))
         return {'tap_sequence': TAP_SEQUENCES[tap_id].tolist(), 'tap_id': tap_id,
                 'adj_delay': ADJ_DELAYS[adj_delay_id], 'adj_delay_id': adj_delay_id,
-                'step_reward_level': step_reward_level, 'burn_over_multiplier': self.burn_over_multiplier,
+                'aggression_level': aggression_level, 'burn_over_multiplier': self.burn_over_multiplier,
                 'lines': lines}
 
     def _GetNewBoard(self):

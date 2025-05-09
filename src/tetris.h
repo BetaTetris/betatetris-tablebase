@@ -97,7 +97,7 @@ class Tetris {
     }
 
     auto [lines, new_board] = before_clear.ClearLines();
-    int delta_score = Score(lines_, lines);
+    int delta_score = GameScore(lines_, lines);
     lines_ += lines;
     board_ = new_board;
     pieces_++;
@@ -105,12 +105,8 @@ class Tetris {
     initial_move_ = 0;
     now_piece_ = next_piece_;
     next_piece_ = next_piece;
-    if (lines_ >= kLineCap) {
+    if (lines_ >= kLineCap || (kTetrisOnly && lines && lines != 4)) {
       game_over_ = true;
-#ifdef TETRIS_ONLY
-    } else if (lines && lines != 4) {
-      game_over_ = true;
-#endif
     } else {
       CalculateMoves_(true);
     }
@@ -122,7 +118,12 @@ class Tetris {
   }
 
  public:
-  Tetris() : tap_sequence_{{2,2,2,2,2,2,2,2,2,2}}, adj_delay_{ADJ_DELAY} {}
+  Tetris() :
+#if defined(TAP_SPEED) && defined(ADJ_DELAY)
+      tap_sequence_(TAP_SPEED().toarray()), adj_delay_{ADJ_DELAY} {}
+#else
+      tap_sequence_(Tap30Hz().toarray()), adj_delay_{18} {}
+#endif
 
   void Reset(const Board& b, int lines, int now_piece, int next_piece, const int tap_sequence[10], int adj_delay) {
     memcpy(tap_sequence_.data(), tap_sequence, sizeof(tap_sequence_));
@@ -146,8 +147,13 @@ class Tetris {
   }
 
   void Reset(const Board& b, int lines, int now_piece, int next_piece) {
+#if defined(TAP_SPEED) && defined(ADJ_DELAY)
     constexpr TAP_SPEED tap_table;
     Reset(b, lines, now_piece, next_piece, tap_table.data(), ADJ_DELAY);
+#else
+    constexpr Tap30Hz tap_table;
+    Reset(b, lines, now_piece, next_piece, tap_table.data(), 18);
+#endif
   }
 
   bool IsNoAdjMove(const Position& pos) const {
