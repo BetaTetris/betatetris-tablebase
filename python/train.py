@@ -79,6 +79,8 @@ class Main:
         self.cur_raw_weight = self.c.raw_weight()
         self.cur_raw_avg_weight = self.c.raw_avg_weight()
         self.cur_vf_weight = self.c.vf_weight()
+        self.cur_low_prob_weight = self.c.low_prob_weight()
+        self.cur_low_prob_threshold = self.c.low_prob_threshold()
 
     def destroy(self):
         self.generator.Close()
@@ -143,13 +145,18 @@ class Main:
         clip_range = self.c.clipping_range
         """## PPO Loss"""
         # Sampled observations are fed into the model to get $\pi_\theta(a_t|s_t)$ and $V^{\pi_\theta}(s_t)$;
-        pi, value = self.model_opt(samples['obs'])
-        pi = Categorical(logits=pi)
+        pi_logits, value = self.model_opt(samples['obs'])
+        pi = Categorical(logits=pi_logits)
         raw_dist = Normal(value[1], F.softplus(value[2], beta=1e3).clamp(min=1e-5))
         raw_dev = value[2]
         raw_avg = value[1]
         value = value[0]
 
+        with torch.no_grad():
+            finite_mask = torch.isfinite(pi_logits)
+            high_mask = torch.logical_and(finite_mask, pi.probs >= self.cur_low_prob_threshold)
+            row_avg = torch.where(finite_mask, pi_logits, 0).sum(axis=1) / finite_mask.sum(axis=1)
+            row_sign = torch.where(row_avg > 0, 1, -1).unsqueeze(1)
         skip_mask = samples['skip_mask']
 
         # #### Policy
@@ -185,6 +192,14 @@ class Main:
         entropy_bonus[skip_mask] = 0
         entropy_bonus = entropy_bonus.mean()
 
+        # #### Revive low-probability actions
+        high_prob_penalty = pi_logits.clone()
+        high_prob_penalty[~high_mask] = 0
+        high_prob_penalty = high_prob_penalty.mean()
+        logit_value_penalty = pi_logits * row_sign
+        logit_value_penalty[~finite_mask] = 0
+        logit_value_penalty = logit_value_penalty.mean()
+
         # #### Value
         # Clipping makes sure the value function $V_\theta$ doesn't deviate
         #  significantly from $V_{\theta_{OLD}}$.
@@ -208,8 +223,14 @@ class Main:
 
         # we want to maximize $\mathcal{L}^{CLIP+VF+EB}(\theta)$
         # so we take the negative of it as the loss
-        loss = -(policy_reward + self.cur_entropy_weight * entropy_bonus) + \
-               self.cur_vf_weight * vf_loss + self.cur_raw_weight * raw_loss + self.cur_raw_avg_weight * raw_avg_loss
+        loss = (
+            -policy_reward
+            -self.cur_entropy_weight * entropy_bonus
+            +self.cur_low_prob_weight * high_prob_penalty
+            +self.cur_vf_weight * vf_loss
+            +self.cur_raw_weight * raw_loss
+            +self.cur_raw_avg_weight * raw_avg_loss
+        )
 
         # for monitoring
         clip_fraction = (abs((ratio - 1.0)) > clip_range).to(torch.float).mean()
@@ -219,7 +240,9 @@ class Main:
                      'raw_avg_loss': raw_avg_loss ** 0.5,
                      'entropy_bonus': entropy_bonus,
                      'kl_div': kl_div.mean(),
-                     'clip_fraction': clip_fraction})
+                     'clip_fraction': clip_fraction,
+                     'median_prob': torch.median(pi.probs[finite_mask]),
+                     'logits_mean': logit_value_penalty})
         return loss
 
     def run_training_loop(self):

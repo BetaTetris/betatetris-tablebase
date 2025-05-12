@@ -41,6 +41,8 @@ class Configs(BaseConfigs):
     vf_weight: float = FloatDynamicHyperParam(1, range_ = (0, 5))
     raw_weight: float = FloatDynamicHyperParam(0, range_ = (0, 1e-2))
     raw_avg_weight: float = FloatDynamicHyperParam(0, range_ = (0, 5))
+    low_prob_threshold: float = FloatDynamicHyperParam(5e-4, range_ = (0, 1e-2))
+    low_prob_weight: float = FloatDynamicHyperParam(1e-2, range_ = (0, 1))
     entropy_weight: float = FloatDynamicHyperParam(1.5e-2, range_ = (0, 5e-2))
     reg_l2: float = FloatDynamicHyperParam(0., range_ = (0, 5e-5))
 

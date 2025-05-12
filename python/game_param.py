@@ -94,6 +94,7 @@ class GameParamManager:
         if bucket_start == bucket_end: raise RuntimeError("unexpected")
         KS_START = LEVEL_LINES[2] // BUCKET_INTERVAL
         DKS_START = LEVEL_LINES[3] // BUCKET_INTERVAL
+        if tetris.Tetris.IsTetrisOnly(): n_count[0] /= 2
         n_count[0,0] /= 3
         n_count[0,1] /= 6
         n_count[2,2] /= 3

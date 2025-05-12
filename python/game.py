@@ -48,7 +48,7 @@ class Game:
         if self.manager:
             while True:
                 self.params = self.manager.GetNewParam()
-                n_param = {i: j for i, j in self.params.items() if i not in ['tap_id', 'adj_delay_id', 'is_short']}
+                n_param = {i: j for i, j in self.params.items() if i not in ['tap_id', 'adj_delay_id', 'is_short', 'is_board']}
                 self.env.Reset(skip_unique_initial=True, **n_param)
                 if not self.env.IsOver(): break
         else:

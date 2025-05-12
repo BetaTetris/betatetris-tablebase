@@ -86,9 +86,9 @@ class PythonTetris {
     ret.reward = ret.raw_reward;
     double bottom_multiplier = kBottomMultiplier_;
     int tap_4 = tetris.GetTapSequence()[3];
+    int now_lines = tetris.GetLines();
     if (aggression_level_ == 0) {
       // aggro; assign over probability for burns
-      int now_lines = tetris.GetLines();
       int tap_mode = 0, adj_mode = 0;
       switch (tap_4) {
         case 6: tap_mode = tetris.GetTapSequence()[4] <= 10 ? 5 : 6; break;
@@ -201,9 +201,11 @@ class PythonTetris {
       // line out
       if ((no_scale_39 && tetris.LevelSpeed() == kLevel39) ||
           (no_scale_29 && (tetris.LevelSpeed() == kLevel29 || tetris.LevelSpeed() == kLevel39))) {
-        ret.reward = ScoreFromLevel(tetris.GetLevel(), 1) * lines * kRewardMultiplier_;
+        // do not reward lines after line cap to avoid aggressive during end
+        ret.reward = 3000 * kRewardMultiplier_ * (lines - std::max(0, now_lines - kLineCap));
         bottom_multiplier = 1.0;
-        n_step_reward = 0;
+        // minimal step reward to avoid filling up the board to lengthen game at end
+        n_step_reward = 10 * kRewardMultiplier_;
       }
       // scale reward to avoid large step reward get higher overall reward
       ret.reward *= (2800 * kRewardMultiplier_) / (2800 * kRewardMultiplier_ + n_step_reward);
