@@ -22,8 +22,9 @@ class PythonTetris {
   static constexpr double kStepReward_ = 2e-3;
 #elif defined(TETRIS_ONLY)
   static constexpr double kRewardPerTetris_ = 0.25; // 0.25 per tetris
+  static constexpr double kBurnReward_ = 0.02; // per line; to make it figure out dirty
   static constexpr double kBottomMultiplier_ = 2.0;
-  static constexpr double kStepReward_ = 2e-3;
+  static constexpr double kStepReward_ = 1e-3;
 #else // normal
   static constexpr double kRewardMultiplier_ = 1e-5; // 10 per maxout
   static constexpr double kBottomMultiplier_ = 1.1;
@@ -79,6 +80,7 @@ class PythonTetris {
 #elif defined(TETRIS_ONLY)
     ret.raw_reward = lines == 4 ? kRewardPerTetris_ : 0;
     ret.reward = ret.raw_reward + kStepReward_;
+    if (lines && lines < 4) ret.reward += lines * kBurnReward_;
     if (lines == 4 && pos.x >= 18) ret.reward *= kBottomMultiplier_;
     return ret;
 #else // normal

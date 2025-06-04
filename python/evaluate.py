@@ -215,6 +215,14 @@ class Game:
         self.env.Reset(now, nxt, **reset_args)
         self.stats = [0, 0, 0, 0]
 
+def recv_until(sock, n):
+    chunks = bytearray()
+    while len(chunks) < n:
+        packet = sock.recv(n - len(chunks))
+        if not packet: break
+        chunks.extend(packet)
+    return bytes(chunks)
+
 def worker_process(remote, q_size, offset, seed_queue, shms):
     if args.server:
         host, port = args.server.split(':')
@@ -222,7 +230,8 @@ def worker_process(remote, q_size, offset, seed_queue, shms):
         board_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             board_conn.connect((host, port))
-        except:
+        except Exception as e:
+            print('Connection failed:', e)
             board_conn = None
     else:
         board_conn = None
@@ -287,7 +296,7 @@ def worker_process(remote, q_size, offset, seed_queue, shms):
                         sz = min(255, len(states) - i)
                         query = bytes([sz]) + b''.join(states[i:i+sz])
                         board_conn.sendall(query)
-                        result = board_conn.recv(22 * sz)
+                        result = recv_until(board_conn, 22 * sz)
                         assert(len(result) == 22 * sz)
                         for j in range(sz):
                             resp.append(result[22*j:22*(j+1)])
