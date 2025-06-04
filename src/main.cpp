@@ -357,8 +357,9 @@ int main(int argc, char** argv) {
   board_server.add_description("Server for boards");
   ServerArgs(board_server);
   DataDirArg(board_server);
-  board_server.add_argument("name").required()
-    .help("Name of the threshold");
+  board_server.add_argument("name")
+    .help("Name of the threshold")
+    .default_value("");
 
   ArgumentParser simulate("simulate", "", default_arguments::help);
   simulate.add_description("Simulate games");
