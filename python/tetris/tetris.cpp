@@ -267,41 +267,9 @@ PyObject* Tetris_GetState(PythonTetris* self, PyObject* args, PyObject* kwds) {
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "|i", (char**)kwlist, &line_reduce)) {
     return nullptr;
   }
-  PythonTetris::State state{};
+  State state{};
   self->GetState(state, line_reduce);
-  PyObject *r1, *r2, *r3, *r4, *r5;
-  {
-    npy_intp dims[] = {state.board.size(), state.board[0].size(), state.board[0][0].size()};
-    r1 = PyArray_SimpleNew(3, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r1), state.board.data(), sizeof(state.board));
-  }
-  {
-    npy_intp dims[] = {state.meta.size()};
-    r2 = PyArray_SimpleNew(1, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r2), state.meta.data(), sizeof(state.meta));
-  }
-  {
-    npy_intp dims[] = {state.moves.size(), state.moves[0].size(), state.moves[0][0].size()};
-    r3 = PyArray_SimpleNew(3, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r3), state.moves.data(), sizeof(state.moves));
-  }
-  {
-    npy_intp dims[] = {state.move_meta.size()};
-    r4 = PyArray_SimpleNew(1, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r4), state.move_meta.data(), sizeof(state.move_meta));
-  }
-  {
-    npy_intp dims[] = {state.meta_int.size()};
-    r5 = PyArray_SimpleNew(1, dims, NPY_INT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r5), state.meta_int.data(), sizeof(state.meta_int));
-  }
-  PyObject* ret = PyTuple_Pack(5, r1, r2, r3, r4, r5);
-  Py_DECREF(r1);
-  Py_DECREF(r2);
-  Py_DECREF(r3);
-  Py_DECREF(r4);
-  Py_DECREF(r5);
-  return ret;
+  return state.ToPython();
 }
 
 #ifndef NO_ROTATION
@@ -311,75 +279,17 @@ PyObject* Tetris_GetAdjStates(PythonTetris* self, PyObject* args, PyObject* kwds
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
-  PythonTetris::State state[kPieces]{};
-  self->GetAdjStates(pos, state);
-  PyObject *r1, *r2, *r3, *r4, *r5;
-#define COPY_STATE(dest, i, name) \
-  for (size_t i = 0; i < kPieces; i++) { \
-    memcpy((char*)PyArray_DATA((PyArrayObject*)dest) + sizeof(state[0].name) * i, state[i].name.data(), sizeof(state[0].name)); \
-  }
-  {
-    npy_intp dims[] = {kPieces, state[0].board.size(), state[0].board[0].size(), state[0].board[0][0].size()};
-    r1 = PyArray_SimpleNew(4, dims, NPY_FLOAT32);
-    COPY_STATE(r1, i, board);
-  }
-  {
-    npy_intp dims[] = {kPieces, state[0].meta.size()};
-    r2 = PyArray_SimpleNew(2, dims, NPY_FLOAT32);
-    COPY_STATE(r2, i, meta);
-  }
-  {
-    npy_intp dims[] = {kPieces, state[0].moves.size(), state[0].moves[0].size(), state[0].moves[0][0].size()};
-    r3 = PyArray_SimpleNew(4, dims, NPY_FLOAT32);
-    COPY_STATE(r3, i, moves);
-  }
-  {
-    npy_intp dims[] = {kPieces, state[0].move_meta.size()};
-    r4 = PyArray_SimpleNew(2, dims, NPY_FLOAT32);
-    COPY_STATE(r4, i, move_meta);
-  }
-  {
-    npy_intp dims[] = {kPieces, state[0].meta_int.size()};
-    r5 = PyArray_SimpleNew(2, dims, NPY_INT32);
-    COPY_STATE(r5, i, meta_int);
-  }
-#undef COPY_STATE
-  PyObject* ret = PyTuple_Pack(5, r1, r2, r3, r4, r5);
-  Py_DECREF(r1);
-  Py_DECREF(r2);
-  Py_DECREF(r3);
-  Py_DECREF(r4);
-  Py_DECREF(r5);
-  return ret;
+  return self->GetAdjStates(pos).ToPython();
 }
 #endif // !NO_ROTATION
 
 static PyObject* Tetris_StateShapes(void*, PyObject* Py_UNUSED(ignored)) {
   PyObject *r1, *r2, *r3, *r4, *r5;
-  {
-    int dim1 = std::tuple_size<decltype(PythonTetris::State::board)>::value;
-    int dim2 = std::tuple_size<decltype(PythonTetris::State::board)::value_type>::value;
-    int dim3 = std::tuple_size<decltype(PythonTetris::State::board)::value_type::value_type>::value;
-    r1 = Py_BuildValue("(iii)", dim1, dim2, dim3);
-  }
-  {
-    int dim1 = std::tuple_size<decltype(PythonTetris::State::meta)>::value;
-    r2 = Py_BuildValue("(i)", dim1);
-  }
-  {
-    int dim1 = std::tuple_size<decltype(PythonTetris::State::moves)>::value;
-    int dim2 = std::tuple_size<decltype(PythonTetris::State::moves)::value_type>::value;
-    int dim3 = std::tuple_size<decltype(PythonTetris::State::moves)::value_type::value_type>::value;
-    r3 = Py_BuildValue("(iii)", dim1, dim2, dim3);
-  }
-  {
-    int dim1 = std::tuple_size<decltype(PythonTetris::State::move_meta)>::value;
-    r4 = Py_BuildValue("(i)", dim1);
-  }
-  {
-    int dim1 = std::tuple_size<decltype(PythonTetris::State::meta_int)>::value;
-    r5 = Py_BuildValue("(i)", dim1);
-  }
+  r1 = Py_BuildValue("(iii)", kStateShapes[0][0], kStateShapes[0][1], kStateShapes[0][2]);
+  r2 = Py_BuildValue("(i)", kStateShapes[1][0]);
+  r3 = Py_BuildValue("(iii)", kStateShapes[2][0], kStateShapes[2][1], kStateShapes[2][2]);
+  r4 = Py_BuildValue("(i)", kStateShapes[3][0]);
+  r5 = Py_BuildValue("(i)", kStateShapes[4][0]);
   PyObject* ret = PyTuple_Pack(5, r1, r2, r3, r4, r5);
   Py_DECREF(r1);
   Py_DECREF(r2);
