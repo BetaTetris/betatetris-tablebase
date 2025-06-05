@@ -35,7 +35,7 @@ class Play {
     return {Position::Invalid};
   }
 
-  std::array<Position, 7> GetStrat(const Tetris& game, size_t* move_idx_ptr = nullptr) {
+  std::array<Position, kPieces> GetStrat(const Tetris& game, size_t* move_idx_ptr = nullptr) {
     return GetStrat(game.GetBoard().ToBytes(), game.NowPiece(), game.GetLines(), move_idx_ptr);
   }
 

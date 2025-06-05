@@ -342,7 +342,7 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
   std::vector<T> ReadBatch(size_t num, size_t buf_size = std::string::npos) {
     ParseBufSize(buf_size);
     std::vector<T> ret;
-    ret.reserve(num);
+    if (num != std::string::npos) ret.reserve(num);
     try {
       for (size_t i = 0; i < num; i++) ret.push_back(ReadOne(buf_size));
     } catch (ReadError&) {}
@@ -674,7 +674,7 @@ class CompressedClassReader : public io_internal::ClassReaderImpl<T> {
   std::vector<T> ReadBatch(size_t num, size_t buf_size = std::string::npos, size_t ind_buf_size = std::string::npos) {
     ParseBufSize(buf_size, ind_buf_size);
     std::vector<T> ret;
-    ret.reserve(num);
+    if (num != std::string::npos) ret.reserve(num);
     try {
       for (size_t i = 0; i < num; i++) ret.push_back(ReadOne(buf_size, ind_buf_size));
     } catch (ReadError&) {}

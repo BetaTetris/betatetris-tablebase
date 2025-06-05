@@ -375,6 +375,13 @@ int main(int argc, char** argv) {
     .help("Use TetrisGYM RNG (seed is decimal)")
     .default_value(false)
     .implicit_value(true);
+  simulate.add_argument("--dataset-file")
+    .help("Output supervised data file")
+    .default_value("");
+  simulate.add_argument("--dataset-tag")
+    .help("Tag of supervised data")
+    .default_value(0)
+    .scan<'i', int>();
 
   ArgumentParser inspect("inspect", "", default_arguments::help);
   inspect.add_description("Inspect files");
@@ -681,8 +688,10 @@ int main(int argc, char** argv) {
       SetDataDir(args);
       std::string seed_file = args.get<std::string>("--seed-file");
       std::string output_file = args.get<std::string>("--output-file");
+      std::string dataset_file = args.get<std::string>("--dataset-file");
       bool gym_rng = args.get<bool>("--gym-rng");
-      OutputSimulate(seed_file, output_file, gym_rng);
+      int tag = args.get<int>("--dataset-tag");
+      OutputSimulate(seed_file, output_file, gym_rng, dataset_file, (uint32_t)tag);
     } else if (program.is_subcommand_used("inspect")) {
       auto& subparser = program.at<ArgumentParser>("inspect");
       if (subparser.is_subcommand_used("board")) {

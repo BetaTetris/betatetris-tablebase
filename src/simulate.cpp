@@ -1,13 +1,17 @@
 #include "simulate.h"
 
+#include <mutex>
 #include <random>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <filesystem>
 #include <type_traits>
+#include <unordered_set>
+#include "thread_pool.hpp"
 #include "play.h"
 #include "config.h"
-#include "thread_pool.hpp"
+#include "supervised_data.h"
 
 namespace {
 
@@ -69,12 +73,30 @@ class RNGNormal {
   }
 };
 
+class SupervisedDataWriter {
+  CompressedClassWriter<SupervisedData> writer_;
+  std::mutex mtx_;
+
+ public:
+  SupervisedDataWriter(const std::string& fname) : writer_(fname, 65536) {}
+  void Write(const std::vector<SupervisedData>& data) {
+    std::lock_guard<std::mutex> lck(mtx_);
+    writer_.Write(data);
+  }
+  void Write(const std::unordered_set<SupervisedData>& data) {
+    std::lock_guard<std::mutex> lck(mtx_);
+    for (auto& i : data) writer_.Write(i);
+  }
+};
+
 template <class RNG>
-std::vector<SimulateResult> Simulate(const uint64_t seeds[], size_t num) {
+std::vector<SimulateResult> Simulate(
+    const uint64_t seeds[], size_t num, SupervisedDataWriter* writer, uint32_t tag) {
   Tetris game;
   RNG rng;
   Play play;
   std::vector<SimulateResult> ret;
+  std::unordered_set<SupervisedData> dataset;
   const char kPieceNames[] = "TJZOSLI";
   for (size_t i = 0; i < num; i++) {
     int seed = seeds[i];
@@ -90,6 +112,13 @@ std::vector<SimulateResult> Simulate(const uint64_t seeds[], size_t num) {
     while (!game.IsOver()) {
       auto strats = play.GetStrat(game);
       if (strats[0] == Position::Invalid) break;
+      if (writer) {
+        dataset.emplace(game.GetBoard(), tag, game.GetLines(), game.NowPiece(), strats);
+        if (dataset.size() >= 1048576) {
+          writer->Write(dataset);
+          dataset.clear();
+        }
+      }
       cur.piece_seq += kPieceNames[nxt_piece];
       nxt_piece = rng.Spawn();
       game.DirectPlacement(strats[game.NextPiece()], nxt_piece);
@@ -111,14 +140,39 @@ std::vector<SimulateResult> Simulate(const uint64_t seeds[], size_t num) {
     cur.lines = game.GetLines();
     ret.push_back(std::move(cur));
   }
+  if (writer) writer->Write(dataset);
   return ret;
 }
 
 template <class RNG>
-std::vector<SimulateResult> SimulateParallel(const std::vector<uint64_t>& seeds) {
+std::vector<SimulateResult> SimulateParallel(const std::vector<uint64_t>& seeds, const std::string& fname, uint32_t tag) {
+  std::unique_ptr<SupervisedDataWriter> writer;
+  if (!fname.empty()) {
+    bool renamed = false;
+    const std::string fname_old = fname + ".tmp_bak";
+    try {
+      std::filesystem::rename(fname + ".index", fname_old + ".index");
+      std::filesystem::rename(fname, fname_old);
+      renamed = true;
+    } catch (std::runtime_error&) {} // including std::filesystem::filesystem_error
+    writer = std::make_unique<SupervisedDataWriter>(fname);
+    if (renamed) {
+      try {
+        CompressedClassReader<SupervisedData> reader(fname_old);
+        while (true) {
+          auto data = reader.ReadBatch(524288);
+          if (data.empty()) break;
+          writer->Write(data);
+        }
+      } catch (std::runtime_error&) {}
+      std::filesystem::remove(fname_old + ".index");
+      std::filesystem::remove(fname_old);
+    }
+  }
+
   BS::thread_pool pool(kParallel);
   auto result = pool.parallelize_loop(0, seeds.size(), [&](int l, int r){
-    return Simulate<RNG>(seeds.data() + l, r - l);
+    return Simulate<RNG>(seeds.data() + l, r - l, writer.get(), tag);
   }).get();
   std::vector<SimulateResult> ret;
   for (auto& i : result) {
@@ -145,15 +199,18 @@ void OutputResult(std::basic_ostream<char>* out, const std::vector<SimulateResul
 
 } // namespace
 
-std::vector<SimulateResult> Simulate(const std::vector<uint64_t>& seeds, bool gym_rng) {
+std::vector<SimulateResult> Simulate(
+    const std::vector<uint64_t>& seeds, bool gym_rng, const std::string& dataset_file, uint32_t tag) {
   if (gym_rng) {
-    return SimulateParallel<RNGGym>(seeds);
+    return SimulateParallel<RNGGym>(seeds, dataset_file, tag);
   } else {
-    return SimulateParallel<RNGNormal>(seeds);
+    return SimulateParallel<RNGNormal>(seeds, dataset_file, tag);
   }
 }
 
-void OutputSimulate(const std::string& seed_file, const std::string& out_file, bool gym_rng) {
+void OutputSimulate(
+    const std::string& seed_file, const std::string& out_file, bool gym_rng,
+    const std::string& dataset_file, uint32_t tag) {
   std::vector<uint64_t> seeds;
   if (seed_file == "-") {
     seeds = InputSeed(&std::cin);
@@ -161,7 +218,7 @@ void OutputSimulate(const std::string& seed_file, const std::string& out_file, b
     std::ifstream fin(seed_file);
     seeds = InputSeed(&fin);
   }
-  auto res = Simulate(seeds, gym_rng);
+  auto res = Simulate(seeds, gym_rng, dataset_file, tag);
   if (out_file == "-") {
     OutputResult(&std::cout, res);
   } else {
