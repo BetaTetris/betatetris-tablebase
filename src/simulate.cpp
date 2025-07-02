@@ -97,13 +97,16 @@ std::vector<SimulateResult> Simulate(
   Play play;
   std::vector<SimulateResult> ret;
   std::unordered_set<SupervisedData> dataset;
+  std::vector<SupervisedData> dataset_buf;
   const char kPieceNames[] = "TJZOSLI";
   for (size_t i = 0; i < num; i++) {
+    dataset_buf.clear();
     int seed = seeds[i];
     rng.Reset(seed);
     int now_piece = rng.Spawn();
     int nxt_piece = rng.Spawn();
-    game.Reset(Board::Ones, 0, now_piece, nxt_piece);
+    int start_lines = 0;
+    game.Reset(Board::Ones, start_lines, now_piece, nxt_piece);
 
     SimulateResult cur;
     cur.seed = seed;
@@ -112,17 +115,20 @@ std::vector<SimulateResult> Simulate(
     while (!game.IsOver()) {
       auto strats = play.GetStrat(game);
       if (strats[0] == Position::Invalid) break;
-      if (writer) {
-        dataset.emplace(game.GetBoard(), tag, game.GetLines(), game.NowPiece(), strats);
+      if (writer) dataset_buf.emplace_back(game.GetBoard(), tag, game.GetLines(), game.NowPiece(), strats);
+      cur.piece_seq += kPieceNames[nxt_piece];
+      nxt_piece = rng.Spawn();
+      game.DirectPlacement(strats[game.NextPiece()], nxt_piece);
+      int n_lines = game.GetLines() - prev_lines;
+      cur.lines_seq += '0' + n_lines;
+      if (writer && n_lines && (!kTetrisOnly || n_lines == 4)) {
+        for (auto& i : dataset_buf) dataset.emplace(std::move(i));
+        dataset_buf.clear();
         if (dataset.size() >= 1048576) {
           writer->Write(dataset);
           dataset.clear();
         }
       }
-      cur.piece_seq += kPieceNames[nxt_piece];
-      nxt_piece = rng.Spawn();
-      game.DirectPlacement(strats[game.NextPiece()], nxt_piece);
-      cur.lines_seq += '0' + (game.GetLines() - prev_lines);
       for (int i = 0; i < 3; i++) {
         if (prev_lines < kLevelSpeedLines[i+1] && kLevelSpeedLines[i+1] <= game.GetLines()) {
           cur.transitions[i] = game.RunScore();
