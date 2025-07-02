@@ -89,7 +89,7 @@ void CalculateBlock(
       for (size_t i = 0; i < item.next_ids_size; i++) {
         auto& [next, lines] = item.next_ids[i];
         local_val[i] = prev[next];
-        local_val[i] += Score(base_lines, lines);
+        local_val[i] += TablebaseScore(base_lines, lines);
       }
       __m256 probs = _mm256_load_ps(kTransitionProb[piece]);
       __m256i res_idx = _mm256_setzero_si256();
