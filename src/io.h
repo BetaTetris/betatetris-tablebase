@@ -409,7 +409,7 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
     } catch (ReadError&) {}
   }
 
-  size_t NumIndex() const { return ItemsPerIndex() ? (index_file_size - 8) / 8 : 0; }
+  size_t NumIndex() const { return ItemsPerIndex() ? index_file_size / 8 - 2 : 0; }
 };
 
 template <class T>

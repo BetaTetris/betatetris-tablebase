@@ -104,7 +104,7 @@ class IOTest : public ::testing::Test {
 class IOTestConstSize : public IOTest {
  protected:
   std::vector<ConstSizeStruct> vec;
-  void SetUp(size_t len, bool compressed = false, size_t items_per_index = 64) {
+  void SetUp(size_t len, size_t items_per_index = 64, bool compressed = false) {
     gen.seed(0);
     vec.resize(len);
     for (auto& i : vec) {
@@ -171,17 +171,20 @@ TEST_F(IOTestConstSize, ReadWrite) {
 }
 
 TEST_F(IOTestConstSize, ReadWriteCompressed) {
-  SetUp(1000, true);
+  constexpr int N = 1000, I = 64;
+  SetUp(N, I, true);
   ASSERT_EQ(std::filesystem::is_regular_file(kTestIndexFile), true);
   {
     CompressedClassReader<ConstSizeStruct> reader(kTestFile);
-    auto nvec = reader.ReadBatch(1000);
+    EXPECT_EQ(reader.ItemsPerIndex(), I);
+    EXPECT_EQ(reader.NumIndex(), (N + I - 1) / I);
+    auto nvec = reader.ReadBatch(N);
     ASSERT_EQ(nvec, vec);
     ASSERT_EQ(0, reader.ReadBatch(1).size());
   }
   {
     CompressedClassReader<ConstSizeStruct> reader(kTestFile);
-    auto nvec = reader.ReadBatch(1000, 133, 144);
+    auto nvec = reader.ReadBatch(N, 133, 144);
     ASSERT_EQ(nvec, vec);
   }
 }
@@ -194,7 +197,7 @@ TEST_F(IOTestConstSize, Seek) {
 }
 
 TEST_F(IOTestConstSize, SeekCompressed) {
-  SetUp(100000, true);
+  SetUp(100000, 64, true);
   CompressedClassReader<ConstSizeStruct> reader(kTestFile);
   TestSeek(1000, reader, vec);
   TestSeek(10000, reader, vec, 0, 0);
@@ -204,19 +207,19 @@ TEST_F(IOTestVarSize, ReadWrite) {
   constexpr int N = 1000;
   for (size_t index : {0, 256}) {
     TearDown();
-    SetUp(1000, index);
+    SetUp(N, index);
     ASSERT_EQ(std::filesystem::is_regular_file(kTestIndexFile), (bool)index);
     {
       ClassReader<VarSizeStruct> reader(kTestFile);
-      ASSERT_EQ(reader.ItemsPerIndex(), index);
-      ASSERT_EQ(reader.NumIndex(), index ? (N + index - 1) / index : 0);
-      auto nvec = reader.ReadBatch(1000);
+      EXPECT_EQ(reader.ItemsPerIndex(), index);
+      EXPECT_EQ(reader.NumIndex(), index ? (N + index - 1) / index : 0);
+      auto nvec = reader.ReadBatch(N);
       ASSERT_EQ(nvec, vec);
       ASSERT_EQ(0, reader.ReadBatch(1).size());
     }
     {
       ClassReader<VarSizeStruct> reader(kTestFile);
-      auto nvec = reader.ReadBatch(1000, 133);
+      auto nvec = reader.ReadBatch(N, 133);
       ASSERT_EQ(nvec, vec);
     }
   }
@@ -228,15 +231,15 @@ TEST_F(IOTestVarSize, ReadWriteCompressed) {
   ASSERT_EQ(std::filesystem::is_regular_file(kTestIndexFile), true);
   {
     CompressedClassReader<VarSizeStruct> reader(kTestFile);
-    ASSERT_EQ(reader.ItemsPerIndex(), I);
-    ASSERT_EQ(reader.NumIndex(), (N + I - 1) / I);
-    auto nvec = reader.ReadBatch(1000);
+    EXPECT_EQ(reader.ItemsPerIndex(), I);
+    EXPECT_EQ(reader.NumIndex(), (N + I - 1) / I);
+    auto nvec = reader.ReadBatch(N);
     ASSERT_EQ(nvec, vec);
     ASSERT_EQ(0, reader.ReadBatch(1).size());
   }
   {
     CompressedClassReader<VarSizeStruct> reader(kTestFile);
-    auto nvec = reader.ReadBatch(1000, 133, 144);
+    auto nvec = reader.ReadBatch(N, 133, 144);
     ASSERT_EQ(nvec, vec);
   }
 }

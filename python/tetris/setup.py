@@ -4,7 +4,8 @@ from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 import numpy
 
-sources = ['tetris.cpp', 'state.cpp', 'board.cpp', 'module.cpp', '../../src/tetris.cpp', '../../src/frame_sequence.cpp']
+sources = ['tetris.cpp', 'state.cpp', 'board.cpp', 'supervised_reader.cpp', 'module.cpp',
+           '../../src/tetris.cpp', '../../src/frame_sequence.cpp']
 
 class build_ext_ex(build_ext):
     extra_compile_args = {
@@ -30,6 +31,7 @@ name = 'tetris'
 module = Extension(
     name,
     sources=sources,
+    libraries=['zstd'],
     include_dirs=[numpy.get_include()],
 )
 setup(name=name, ext_modules=[module], cmdclass={'build_ext': build_ext_ex})

@@ -45,16 +45,26 @@ struct MultiState {
     STATE_MEMBERS_
 #undef X
   }
+  void resize(size_t sz) {
+#define X(name, id, dims, typ) name.resize(sz);
+    STATE_MEMBERS_
+#undef X
+  }
   void push_back(const State& st) {
-#define X(name, id, dims, typ) name.push_back(st.name);
+    resize(size() + 1);
+#define X(name, id, dims, typ) memcpy(name.back().data(), st.name.data(), sizeof(State::name));
     STATE_MEMBERS_
 #undef X
   }
   void merge(const MultiState& st) {
     size_t offset = size(), sz = size() + st.size();
-#define X(name, id, dims, typ) \
-    name.resize(sz); \
-    memcpy(name.data() + offset, st.name.data(), st.size() * sizeof(State::name));
+    resize(sz);
+#define X(name, id, dims, typ) memcpy(name.data() + offset, st.name.data(), st.size() * sizeof(State::name));
+    STATE_MEMBERS_
+#undef X
+  }
+  void swap(MultiState& st) {
+#define X(name, id, dims, typ) name.swap(st.name);
     STATE_MEMBERS_
 #undef X
   }

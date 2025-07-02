@@ -1,7 +1,6 @@
 #include "hash.h"
-#include "board.h"
 #include "files.h"
-#include "position.h"
+#include "tetris.h"
 
 struct SupervisedData {
   static constexpr bool kIsConstSize = true;
@@ -37,6 +36,12 @@ struct SupervisedData {
     for (size_t i = 0; i < kPieces; i++) {
       pos[i].GetBytes(ret + Position::NumBytes() * i);
     }
+  }
+
+  Tetris GetGame(const int tap_sequence[10], int adj_delay) const {
+    Tetris ret;
+    ret.Reset(board, lines, cur_piece, 0, tap_sequence, adj_delay);
+    return ret;
   }
 
   bool operator==(const SupervisedData& x) const {
