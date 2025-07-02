@@ -79,16 +79,25 @@ class IOTest : public ::testing::Test {
   }
 
   template <class Reader, class T, class... Args>
-  void TestSeek(size_t iters, Reader& reader, const T& vec, Args&&... args) {
-    for (size_t i = 0; i < iters; i++) {
-      size_t num = mrand(0, 3)(gen) ? 1 : std::min((size_t)64, vec.size() - 1);
-      size_t loc = mrand(0, vec.size() - num)(gen);
-      reader.Seek(loc);
-      for (size_t j = 0; j < num; j++) {
-        auto read = reader.ReadOne(std::forward<Args>(args)...);
-        ASSERT_EQ(read, vec[loc + j]);
-      }
+  void TestSeek(Reader& reader, const T& vec, Args&&... args) {
+    size_t num = mrand(0, 3)(gen) ? 1 : std::min((size_t)64, vec.size() - 1);
+    size_t loc = mrand(0, vec.size() - num)(gen);
+    reader.Seek(loc);
+    for (size_t j = 0; j < num; j++) {
+      auto read = reader.ReadOne(std::forward<Args>(args)...);
+      ASSERT_EQ(read, vec[loc + j]);
     }
+  }
+
+  template <class Reader, class T, class... Args>
+  void TestSeek(size_t iters, Reader& reader, const T& vec, Args&&... args) {
+    for (size_t i = 0; i < iters; i++) TestSeek(reader, vec, std::forward<Args>(args)...);
+    // test invalid seek
+    reader.Seek(vec.size() * 10);
+    EXPECT_THROW({ reader.ReadOne(); }, ReadError);
+    reader.Seek(vec.size());
+    EXPECT_THROW({ reader.ReadOne(); }, ReadError);
+    for (size_t i = 0; i < 2; i++) TestSeek(reader, vec, std::forward<Args>(args)...);
   }
 };
 
@@ -192,12 +201,15 @@ TEST_F(IOTestConstSize, SeekCompressed) {
 }
 
 TEST_F(IOTestVarSize, ReadWrite) {
+  constexpr int N = 1000;
   for (size_t index : {0, 256}) {
     TearDown();
     SetUp(1000, index);
     ASSERT_EQ(std::filesystem::is_regular_file(kTestIndexFile), (bool)index);
     {
       ClassReader<VarSizeStruct> reader(kTestFile);
+      ASSERT_EQ(reader.ItemsPerIndex(), index);
+      ASSERT_EQ(reader.NumIndex(), index ? (N + index - 1) / index : 0);
       auto nvec = reader.ReadBatch(1000);
       ASSERT_EQ(nvec, vec);
       ASSERT_EQ(0, reader.ReadBatch(1).size());
@@ -211,10 +223,13 @@ TEST_F(IOTestVarSize, ReadWrite) {
 }
 
 TEST_F(IOTestVarSize, ReadWriteCompressed) {
-  SetUp(1000, 256, true);
+  constexpr int N = 1000, I = 256;
+  SetUp(N, I, true);
   ASSERT_EQ(std::filesystem::is_regular_file(kTestIndexFile), true);
   {
     CompressedClassReader<VarSizeStruct> reader(kTestFile);
+    ASSERT_EQ(reader.ItemsPerIndex(), I);
+    ASSERT_EQ(reader.NumIndex(), (N + I - 1) / I);
     auto nvec = reader.ReadBatch(1000);
     ASSERT_EQ(nvec, vec);
     ASSERT_EQ(0, reader.ReadBatch(1).size());

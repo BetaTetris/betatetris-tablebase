@@ -163,6 +163,7 @@ class ClassReaderImpl {
   std::vector<uint8_t> buf;
   size_t current;
   size_t items_per_index;
+  size_t index_file_size;
   bool eof;
   std::ifstream fin;
   std::ifstream fin_index;
@@ -178,7 +179,7 @@ class ClassReaderImpl {
   }
  public:
   ClassReaderImpl(const std::string& fname, bool check_index) :
-      current(0), items_per_index(0), eof(false) {
+      current(0), items_per_index(0), index_file_size(0), eof(false) {
     static_assert(kIsConstSize || (kSizeNumberBytes >= 1 && kSizeNumberBytes <= 8));
     fin.rdbuf()->pubsetbuf(nullptr, 0);
     fin.open(fname);
@@ -192,6 +193,7 @@ class ClassReaderImpl {
           items_per_index = BytesToInt<uint64_t>(sz_buf);
         }
         if (!items_per_index) throw std::runtime_error("invalid index file");
+        index_file_size = std::filesystem::file_size(fname + ".index");
       }
     }
     buf.reserve(kBufferSize);
@@ -201,6 +203,10 @@ class ClassReaderImpl {
 
   bool HasIndex() const {
     return items_per_index >= 1;
+  }
+
+  size_t ItemsPerIndex() const {
+    return items_per_index;
   }
 
   size_t Position() const {
@@ -276,6 +282,7 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
   using io_internal::ClassReaderImpl<T>::fin;
   using io_internal::ClassReaderImpl<T>::fin_index;
   using io_internal::ClassReaderImpl<T>::items_per_index;
+  using io_internal::ClassReaderImpl<T>::index_file_size;
 
   size_t current_offset;
 
@@ -295,6 +302,7 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
   }
  public:
   using io_internal::ClassReaderImpl<T>::HasIndex;
+  using io_internal::ClassReaderImpl<T>::ItemsPerIndex;
   using io_internal::ClassReaderImpl<T>::Position;
 
   ClassReader(const std::string& fname) :
@@ -316,6 +324,7 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
   }
 
   T ReadOne(size_t buf_size = std::string::npos) {
+    if (eof) throw ReadError("no more elements");
     ParseBufSize(buf_size);
     uint64_t sz = GetNextSize(buf_size);
     ReadUntilSize(current_offset + kSizeNumberBytes + sz, buf_size);
@@ -370,13 +379,15 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
       size_t target_index_idx = location / items_per_index;
       size_t current_index_idx = current / items_per_index;
       if (target_index_idx != current_index_idx || location < current) {
+        eof = false;
         buf.clear();
         // +1 because the first element is items_per_index
         fin_index.clear();
         fin_index.seekg((target_index_idx + 1) * sizeof(uint64_t));
         uint8_t sz_buf[16] = {};
         if (!fin_index.read(reinterpret_cast<char*>(sz_buf), 16) || fin_index.gcount() != 16) {
-          throw std::out_of_range("index out of range");
+          eof = true;
+          return;
         }
         uint64_t start = BytesToInt<uint64_t>(sz_buf), end = BytesToInt<uint64_t>(sz_buf + 8);
         fin.clear();
@@ -386,14 +397,19 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
         current_offset = 0;
       }
     } else if (location < current) {
+      eof = false;
       buf.clear();
       fin.clear();
       fin.seekg(0);
       current = 0;
       current_offset = 0;
     }
-    while (location > current) SkipOne(buf_size);
+    try {
+      while (location > current) SkipOne(buf_size);
+    } catch (ReadError&) {}
   }
+
+  size_t NumIndex() const { return ItemsPerIndex() ? (index_file_size - 8) / 8 : 0; }
 };
 
 template <class T>
@@ -519,6 +535,7 @@ class CompressedClassReader : public io_internal::ClassReaderImpl<T> {
   using io_internal::ClassReaderImpl<T>::fin;
   using io_internal::ClassReaderImpl<T>::fin_index;
   using io_internal::ClassReaderImpl<T>::items_per_index;
+  using io_internal::ClassReaderImpl<T>::index_file_size;
 
   /*
    * buf                                     [may partial]
@@ -634,6 +651,7 @@ class CompressedClassReader : public io_internal::ClassReaderImpl<T> {
   }
  public:
   using io_internal::ClassReaderImpl<T>::HasIndex;
+  using io_internal::ClassReaderImpl<T>::ItemsPerIndex;
   using io_internal::ClassReaderImpl<T>::Position;
 
   CompressedClassReader(const std::string& fname) :
@@ -731,6 +749,8 @@ class CompressedClassReader : public io_internal::ClassReaderImpl<T> {
     }
     while (location > current) SkipOne(buf_size, ind_buf_size);
   }
+
+  size_t NumIndex() const { return (index_file_size - 8) / 16; }
 };
 
 template <class T>
