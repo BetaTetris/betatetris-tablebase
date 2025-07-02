@@ -28,25 +28,35 @@ struct State {
 
 extern std::vector<long> kStateShapes[5];
 
+// X macro for state members
+#define STATE_MEMBERS_ \
+  X(board, 0, 3, NPY_FLOAT32) \
+  X(meta, 1, 1, NPY_FLOAT32) \
+  X(moves, 2, 3, NPY_FLOAT32) \
+  X(move_meta, 3, 1, NPY_FLOAT32) \
+  X(meta_int, 4, 1, NPY_INT32)
+
 struct MultiState {
-  std::vector<decltype(State::board)> board;
-  std::vector<decltype(State::meta)> meta;
-  std::vector<decltype(State::moves)> moves;
-  std::vector<decltype(State::move_meta)> move_meta;
-  std::vector<decltype(State::meta_int)> meta_int;
+#define X(name, id, dims, typ) std::vector<decltype(State::name)> name;
+  STATE_MEMBERS_
+#undef X
   void reserve(size_t sz) {
-    board.reserve(sz);
-    meta.reserve(sz);
-    moves.reserve(sz);
-    move_meta.reserve(sz);
-    meta_int.reserve(sz);
+#define X(name, id, dims, typ) name.reserve(sz);
+    STATE_MEMBERS_
+#undef X
   }
   void push_back(const State& st) {
-    board.push_back(st.board);
-    meta.push_back(st.meta);
-    moves.push_back(st.moves);
-    move_meta.push_back(st.move_meta);
-    meta_int.push_back(st.meta_int);
+#define X(name, id, dims, typ) name.push_back(st.name);
+    STATE_MEMBERS_
+#undef X
+  }
+  void merge(const MultiState& st) {
+    size_t offset = size(), sz = size() + st.size();
+#define X(name, id, dims, typ) \
+    name.resize(sz); \
+    memcpy(name.data() + offset, st.name.data(), st.size() * sizeof(State::name));
+    STATE_MEMBERS_
+#undef X
   }
   size_t size() const { return board.size(); }
   PyObject* ToPython() const;

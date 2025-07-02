@@ -247,75 +247,32 @@ MultiState GetAdjStates(const Tetris& tetris) {
 }
 
 PyObject* State::ToPython() const {
-  PyObject *r1, *r2, *r3, *r4, *r5;
-  {
-    npy_intp dims[] = {kStateShapes[0][0], kStateShapes[0][1], kStateShapes[0][2]};
-    r1 = PyArray_SimpleNew(3, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r1), board.data(), sizeof(State::board));
-  }
-  {
-    npy_intp dims[] = {kStateShapes[1][0]};
-    r2 = PyArray_SimpleNew(1, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r2), meta.data(), sizeof(State::meta));
-  }
-  {
-    npy_intp dims[] = {kStateShapes[2][0], kStateShapes[2][1], kStateShapes[2][2]};
-    r3 = PyArray_SimpleNew(3, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r3), moves.data(), sizeof(State::moves));
-  }
-  {
-    npy_intp dims[] = {kStateShapes[3][0]};
-    r4 = PyArray_SimpleNew(1, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r4), move_meta.data(), sizeof(State::move_meta));
-  }
-  {
-    npy_intp dims[] = {kStateShapes[4][0]};
-    r5 = PyArray_SimpleNew(1, dims, NPY_INT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r5), meta_int.data(), sizeof(State::meta_int));
-  }
-  PyObject* ret = PyTuple_Pack(5, r1, r2, r3, r4, r5);
-  Py_DECREF(r1);
-  Py_DECREF(r2);
-  Py_DECREF(r3);
-  Py_DECREF(r4);
-  Py_DECREF(r5);
+  PyObject *objs[5];
+#define X(name, id, dims, typ) { \
+  npy_intp dim_arr[dims]; \
+  for (int i = 0; i < dims; i++) dim_arr[i] = kStateShapes[id][i]; \
+  objs[id] = PyArray_SimpleNew(dims, dim_arr, typ); \
+  memcpy(PyArray_DATA((PyArrayObject*)objs[id]), name.data(), sizeof(State::name)); \
+}
+  STATE_MEMBERS_
+#undef X
+  PyObject* ret = PyTuple_Pack(5, objs[0], objs[1], objs[2], objs[3], objs[4]);
+  for (int i = 0; i < 5; i++) Py_DECREF(objs[i]);
   return ret;
 }
 
 PyObject* MultiState::ToPython() const {
   long N = size();
-  PyObject *r1, *r2, *r3, *r4, *r5;
-  {
-    npy_intp dims[] = {N, kStateShapes[0][0], kStateShapes[0][1], kStateShapes[0][2]};
-    r1 = PyArray_SimpleNew(4, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r1), board.data(), N * sizeof(State::board));
-  }
-  {
-    npy_intp dims[] = {N, kStateShapes[1][0]};
-    r2 = PyArray_SimpleNew(2, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r2), meta.data(), N * sizeof(State::meta));
-  }
-  {
-    npy_intp dims[] = {N, kStateShapes[2][0], kStateShapes[2][1], kStateShapes[2][2]};
-    r3 = PyArray_SimpleNew(4, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r3), moves.data(), N * sizeof(State::moves));
-  }
-  {
-    npy_intp dims[] = {N, kStateShapes[3][0]};
-    r4 = PyArray_SimpleNew(2, dims, NPY_FLOAT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r4), move_meta.data(), N * sizeof(State::move_meta));
-  }
-  {
-    npy_intp dims[] = {N, kStateShapes[4][0]};
-    r5 = PyArray_SimpleNew(2, dims, NPY_INT32);
-    memcpy(PyArray_DATA((PyArrayObject*)r5), meta_int.data(), N * sizeof(State::meta_int));
-  }
-#pragma GCC diagnostic pop
-  PyObject* ret = PyTuple_Pack(5, r1, r2, r3, r4, r5);
-  Py_DECREF(r1);
-  Py_DECREF(r2);
-  Py_DECREF(r3);
-  Py_DECREF(r4);
-  Py_DECREF(r5);
+  PyObject *objs[5];
+#define X(name, id, dims, typ) { \
+  npy_intp dim_arr[dims + 1] = {N}; \
+  for (int i = 0; i < dims; i++) dim_arr[i + 1] = kStateShapes[id][i]; \
+  objs[id] = PyArray_SimpleNew(dims + 1, dim_arr, typ); \
+  memcpy(PyArray_DATA((PyArrayObject*)objs[id]), name.data(), N * sizeof(State::name)); \
+}
+  STATE_MEMBERS_
+#undef X
+  PyObject* ret = PyTuple_Pack(5, objs[0], objs[1], objs[2], objs[3], objs[4]);
+  for (int i = 0; i < 5; i++) Py_DECREF(objs[i]);
   return ret;
 }
