@@ -15,9 +15,10 @@ import labml.lab
 from labml import monit, tracker, logger, experiment
 
 from generator import GeneratorProcess
-from model import Model
+from model import Model, obs_to_torch
 from config import Configs, LoadConfig, MaxUUID
 from saver import TorchSaver
+import tetris
 
 start_time = time.time()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -57,6 +58,8 @@ class Main:
         cur_params = self.get_game_params()
         self.generator = GeneratorProcess(self.model_opt, self.name, self.c, cur_params, generator_device)
         self.set_game_params(cur_params)
+        self.supervised = None
+        if self.c.supervised_file: self.supervised = tetris.SupervisedDataReader(self.c.supervised_file)
 
     def get_game_params(self):
         return (self.c.gamma(), self.c.lamda(), self.c.burn_over_multiplier(), self.c.board_ratio(), self.c.short_ratio())
@@ -81,6 +84,7 @@ class Main:
         self.cur_vf_weight = self.c.vf_weight()
         self.cur_low_prob_weight = self.c.low_prob_weight()
         self.cur_low_prob_threshold = self.c.low_prob_threshold()
+        self.cur_supervised_weight = self.c.supervised_weight()
 
     def destroy(self):
         self.generator.Close()
@@ -106,7 +110,15 @@ class Main:
                     with torch.no_grad():
                         for k, v in samples.items():
                             if k == 'obs':
-                                mini_batch[k] = [i[mini_batch_indexes] for i in v]
+                                if self.supervised:
+                                    # somehow if we call the model multiple times the results are messed up
+                                    # so we concat supervised & self-play data into the same tensor
+                                    x, y = self.supervised.ReadBatch(self.c.supervised_batch_size)
+                                    x = obs_to_torch(x, device)
+                                    mini_batch['supervised_y'] = torch.tensor(y, device=device)
+                                    mini_batch[k] = [torch.cat([i[mini_batch_indexes], j]) for i, j in zip(v, x)]
+                                else:
+                                    mini_batch[k] = [i[mini_batch_indexes] for i in v]
                             else:
                                 mini_batch[k] = v[mini_batch_indexes]
                     loss = self._calc_loss(samples=mini_batch) / loss_mul
@@ -146,6 +158,10 @@ class Main:
         """## PPO Loss"""
         # Sampled observations are fed into the model to get $\pi_\theta(a_t|s_t)$ and $V^{\pi_\theta}(s_t)$;
         pi_logits, value = self.model_opt(samples['obs'])
+        if self.supervised:
+            sup_pi_logits = pi_logits[-self.c.supervised_batch_size:]
+            pi_logits = pi_logits[:-self.c.supervised_batch_size]
+            value = value[:,:-self.c.supervised_batch_size]
         pi = Categorical(logits=pi_logits)
         raw_dist = Normal(value[1], F.softplus(value[2], beta=1e3).clamp(min=1e-5))
         raw_dev = value[2]
@@ -221,6 +237,18 @@ class Main:
         raw_avg_loss[skip_mask] = 0
         raw_avg_loss = raw_avg_loss.mean()
 
+        # #### supervised
+        # F.cross_entropy does not deal with -inf properly
+        def cross_entropy(logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+            log_probs = torch.log_softmax(logits, dim=1)
+            log_probs = torch.where(target == 0, torch.zeros_like(log_probs), log_probs)
+            loss_per_sample = -(target * log_probs).sum(dim=1)
+            return loss_per_sample.mean()
+        if self.supervised:
+            supervised_loss = cross_entropy(sup_pi_logits, samples['supervised_y'])
+        else:
+            supervised_loss = 0
+
         # we want to maximize $\mathcal{L}^{CLIP+VF+EB}(\theta)$
         # so we take the negative of it as the loss
         loss = (
@@ -230,6 +258,7 @@ class Main:
             +self.cur_vf_weight * vf_loss
             +self.cur_raw_weight * raw_loss
             +self.cur_raw_avg_weight * raw_avg_loss
+            +self.cur_supervised_weight * supervised_loss
         )
 
         # for monitoring
@@ -238,6 +267,7 @@ class Main:
                      'vf_loss': vf_loss ** 0.5,
                      'raw_loss': raw_loss,
                      'raw_avg_loss': raw_avg_loss ** 0.5,
+                     'supervised_loss': supervised_loss,
                      'entropy_bonus': entropy_bonus,
                      'kl_div': kl_div.mean(),
                      'clip_fraction': clip_fraction,

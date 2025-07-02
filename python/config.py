@@ -32,6 +32,7 @@ class Configs(BaseConfigs):
     n_update_per_epoch: int = 32
     # calculate loss in batches of mini_batch_size
     mini_batch_size: int = 800
+    supervised_batch_size: int = 400
     weight_sync_per_epoch: int = 2
 
     ## loss calculation
@@ -44,6 +45,7 @@ class Configs(BaseConfigs):
     low_prob_threshold: float = FloatDynamicHyperParam(5e-4, range_ = (0, 1e-2))
     low_prob_weight: float = FloatDynamicHyperParam(1e-2, range_ = (0, 1))
     entropy_weight: float = FloatDynamicHyperParam(1.5e-2, range_ = (0, 5e-2))
+    supervised_weight: float = FloatDynamicHyperParam(0, range_ = (0, 10))
     reg_l2: float = FloatDynamicHyperParam(0., range_ = (0, 5e-5))
 
     burn_over_multiplier = FloatDynamicHyperParam(0., range_ = (0, 10))
@@ -54,6 +56,7 @@ class Configs(BaseConfigs):
     save_interval: int = 250
     warmup_epochs: int = 16
     board_file: Optional[str] = None
+    supervised_file: Optional[str] = None
 
 
 def MaxUUID(name):
@@ -81,7 +84,7 @@ def LoadConfig(with_experiment = True):
         if ptype == FloatDynamicHyperParam:
             ptype = float
             dynamic_keys.add(key)
-        elif key == 'board_file':
+        elif key in ['board_file', 'supervised_file']:
             ptype = str
         parser.add_argument('--' + key.replace('_', '-'), type = ptype)
 
