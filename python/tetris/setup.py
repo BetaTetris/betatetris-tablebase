@@ -12,7 +12,7 @@ class build_ext_ex(build_ext):
             'unix': ['-std=c++20', '-DLINE_CAP=51200', '-DADJ_DELAY=18', '-DTAP_SPEED=Tap30Hz', '-DNO_2KS=1', '-mbmi2'],
             #'unix': ['-std=c++20', '-DLINE_CAP=430', '-DADJ_DELAY=18', '-DTAP_SPEED=Tap30Hz', '-mbmi2', '-O1'],
             #'unix': ['-std=c++20', '-DLINE_CAP=430', '-DADJ_DELAY=18', '-DTAP_SPEED=Tap30Hz', '-mbmi2', '-fsanitize=address', '-fsanitize=undefined', '-O1'],
-            'msvc': ['/std:c++20', '/DLINE_CAP=51200', '/DADJ_DELAY=18', '/DTAP_SPEED=Tap30Hz', '/NO_2KS=1'],
+            'msvc': ['/std:c++20', '/DLINE_CAP=51200', '/DADJ_DELAY=18', '/DTAP_SPEED=Tap30Hz', '/DNO_2KS=1'],
         }
     }
 
