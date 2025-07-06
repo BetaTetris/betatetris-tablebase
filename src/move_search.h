@@ -68,6 +68,7 @@ PossibleMoves MoveSearch(const Board& b, Level level, int piece) {
 }
 
 using Tap30Hz = move_search::TapTable<0, 2, 2, 2, 2, 2, 2, 2, 2, 2>;
+using Tap24Hz = move_search::TapTable<0, 3, 2, 3, 2, 3, 2, 3, 2, 3>;
 using Tap20Hz = move_search::TapTable<0, 3, 3, 3, 3, 3, 3, 3, 3, 3>;
 using Tap15Hz = move_search::TapTable<0, 4, 4, 4, 4, 4, 4, 4, 4, 4>;
 using Tap12Hz = move_search::TapTable<0, 5, 5, 5, 5, 5, 5, 5, 5, 5>;

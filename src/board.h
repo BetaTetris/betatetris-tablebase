@@ -14,7 +14,9 @@
 
 constexpr size_t kPieces = 7;
 
-class alignas(32) Board;
+template <size_t Align> class alignas(Align) BoardTmpl;
+using Board = BoardTmpl<32>;
+
 constexpr Board operator|(const Board& x, const Board& y);
 constexpr Board operator&(const Board& x, const Board& y);
 
@@ -43,7 +45,8 @@ using ByteBoard = std::array<std::array<uint8_t, 10>, 20>;
 //   column 1: bit 22-41
 //   column 2: bit 44-63
 // A bit of 1 means an empty cell; 0 otherwise.
-class alignas(32) Board {
+template <size_t Align>
+class alignas(Align) BoardTmpl {
  private:
   // 1 wide, offset = (2, 0)
   static constexpr uint64_t kIPiece1_ = 0xf;
@@ -149,16 +152,18 @@ class alignas(32) Board {
 
   uint64_t b1, b2, b3, b4;
 
-  Board() = default;
-  constexpr Board(uint64_t b1, uint64_t b2, uint64_t b3, uint64_t b4) :
+  BoardTmpl() = default;
+  constexpr BoardTmpl(uint64_t b1, uint64_t b2, uint64_t b3, uint64_t b4) :
       b1(b1), b2(b2), b3(b3), b4(b4) {}
+  template <size_t NAlign>
+  constexpr BoardTmpl(const BoardTmpl<NAlign>& b) : BoardTmpl(b.b1, b.b2, b.b3, b.b4) {}
 
-  constexpr Board(std::initializer_list<std::pair<int, int>> positions) :
+  constexpr BoardTmpl(std::initializer_list<std::pair<int, int>> positions) :
       b1(kBoardMask), b2(kBoardMask), b3(kBoardMask), b4(kColumnMask) {
     for (auto& i : positions) SetCellFilled(i.first, i.second);
   }
 
-  constexpr Board(const uint8_t buf[kBoardBytes]) : b1(), b2(), b3(), b4() {
+  constexpr BoardTmpl(const uint8_t buf[kBoardBytes]) : b1(), b2(), b3(), b4() {
     constexpr uint64_t kMask3 = 0x701C0701C0701C07L;
     constexpr uint64_t kMask2 = 0x300C0300C0300C03L;
     constexpr uint64_t kColMask3 = 0x249249249249249L;
@@ -188,9 +193,9 @@ class alignas(32) Board {
     b4 = pext(r4, kColMask2 << 1);
   }
 
-  constexpr Board(const CompactBoard& board) : Board(board.data()) {}
+  constexpr BoardTmpl(const CompactBoard& board) : BoardTmpl(board.data()) {}
 
-  constexpr Board(const ByteBoard& board) : b1(), b2(), b3(), b4() {
+  constexpr BoardTmpl(const ByteBoard& board) : b1(), b2(), b3(), b4() {
     for (int i = 0; i < 20; i++) {
       for (int j = 0; j < 3; j++) b1 |= (uint64_t)board[i][j] << (j * 22 + i);
       for (int j = 3; j < 6; j++) b2 |= (uint64_t)board[i][j] << ((j-3) * 22 + i);
@@ -199,7 +204,7 @@ class alignas(32) Board {
     }
   }
 
-  constexpr Board(std::string_view sv) :
+  constexpr BoardTmpl(std::string_view sv) :
       b1(kBoardMask), b2(kBoardMask), b3(kBoardMask), b4(kColumnMask) {
     int rows = (sv.size() + 1) / 11;
     for (int i = 0; i < rows; i++) {
@@ -633,13 +638,13 @@ class alignas(32) Board {
     return 20 - ctz(~col_and);
   }
 
-  constexpr bool operator==(const Board& x) const = default;
-  constexpr bool operator!=(const Board& x) const = default;
-  constexpr Board& operator|=(const Board& x) {
+  constexpr bool operator==(const BoardTmpl<Align>& x) const = default;
+  constexpr bool operator!=(const BoardTmpl<Align>& x) const = default;
+  constexpr BoardTmpl<Align>& operator|=(const Board& x) {
     b1 |= x.b1; b2 |= x.b2; b3 |= x.b3; b4 |= x.b4;
     return *this;
   }
-  constexpr Board& operator&=(const Board& x) {
+  constexpr BoardTmpl<Align>& operator&=(const Board& x) {
     b1 &= x.b1; b2 &= x.b2; b3 &= x.b3; b4 &= x.b4;
     return *this;
   }
@@ -703,8 +708,8 @@ class alignas(32) Board {
   static const Board Ones;
 };
 
-inline constexpr Board Board::Zeros = Board(0, 0, 0, 0);
-inline constexpr Board Board::Ones = ~Board(0, 0, 0, 0);
+template <size_t Align> inline constexpr Board BoardTmpl<Align>::Zeros = Board(0, 0, 0, 0);
+template <size_t Align> inline constexpr Board BoardTmpl<Align>::Ones = ~Board(0, 0, 0, 0);
 
 constexpr Board operator|(const Board& x, const Board& y) {
   return {x.b1 | y.b1, x.b2 | y.b2, x.b3 | y.b3, x.b4 | y.b4};
@@ -715,9 +720,9 @@ constexpr Board operator&(const Board& x, const Board& y) {
 
 namespace std {
 
-template<>
-struct hash<Board> {
-  constexpr size_t operator()(const Board& b) const {
+template <size_t Align>
+struct hash<BoardTmpl<Align>> {
+  constexpr size_t operator()(const BoardTmpl<Align>& b) const {
     return Hash(Hash(b.b1, b.b3), Hash(b.b2, b.b4));
   }
 };
