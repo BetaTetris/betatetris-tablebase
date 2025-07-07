@@ -163,7 +163,7 @@ class ClassReaderImpl {
   std::vector<uint8_t> buf;
   size_t current;
   size_t items_per_index;
-  size_t index_file_size;
+  size_t file_size, index_file_size;
   bool eof;
   std::ifstream fin;
   std::ifstream fin_index;
@@ -179,11 +179,12 @@ class ClassReaderImpl {
   }
  public:
   ClassReaderImpl(const std::string& fname, bool check_index) :
-      current(0), items_per_index(0), index_file_size(0), eof(false) {
+      current(0), items_per_index(0), file_size(0), index_file_size(0), eof(false) {
     static_assert(kIsConstSize || (kSizeNumberBytes >= 1 && kSizeNumberBytes <= 8));
     fin.rdbuf()->pubsetbuf(nullptr, 0);
     fin.open(fname);
     if (!fin.is_open()) throw std::runtime_error("cannot open file");
+    file_size = std::filesystem::file_size(fname);
     uint8_t sz_buf[8] = {};
     if (check_index) {
       fin_index.rdbuf()->pubsetbuf(nullptr, 0);
@@ -282,6 +283,7 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
   using io_internal::ClassReaderImpl<T>::fin;
   using io_internal::ClassReaderImpl<T>::fin_index;
   using io_internal::ClassReaderImpl<T>::items_per_index;
+  using io_internal::ClassReaderImpl<T>::file_size;
   using io_internal::ClassReaderImpl<T>::index_file_size;
 
   size_t current_offset;
@@ -410,6 +412,10 @@ class ClassReader : public io_internal::ClassReaderImpl<T> {
   }
 
   size_t NumIndex() const { return ItemsPerIndex() ? index_file_size / 8 - 2 : 0; }
+  size_t SizeUpperBound() const {
+    return kIsConstSize ? file_size / T::NumBytes() :
+        (ItemsPerIndex() ? NumIndex() * ItemsPerIndex() : std::string::npos);
+  }
 };
 
 template <class T>
@@ -751,6 +757,7 @@ class CompressedClassReader : public io_internal::ClassReaderImpl<T> {
   }
 
   size_t NumIndex() const { return (index_file_size - 8) / 16; }
+  size_t SizeUpperBound() const { return NumIndex() * ItemsPerIndex(); }
 };
 
 template <class T>

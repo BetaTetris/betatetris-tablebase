@@ -40,18 +40,13 @@ void WriteBoardMap(int group) {
   spdlog::info("Board map writing done");
 }
 
-} // namespace
-
-void SplitBoards(const std::filesystem::path& fname) {
-  spdlog::info("Start preprocessing");
+template <class Reader> void SplitBoards(Reader& reader) {
   std::array<std::vector<CompactBoard>, kGroups> boards;
-  ClassReader<CompactBoard> reader(fname);
-  size_t num_boards = 0;
-  try {
-    num_boards = BoardCount(fname);
-    spdlog::info("Board file contains {} boards", num_boards);
-  } catch (std::exception&) {}
-  for (auto& i : boards) i.reserve(num_boards * (1.0 / kGroups + 0.01) + 1);
+  size_t num_boards = reader.SizeUpperBound();
+  if (num_boards != std::string::npos) {
+    spdlog::info("Board file contains about {} boards", num_boards);
+    for (auto& i : boards) i.reserve(num_boards * (1.0 / kGroups + 0.02) + 10);
+  }
   spdlog::info("Start reading board file");
   while (true) {
     auto chunk = reader.ReadBatch(kBlock);
@@ -70,6 +65,7 @@ void SplitBoards(const std::filesystem::path& fname) {
       std::sort(boards[i].begin(), boards[i].end(), [](const CompactBoard& a, const CompactBoard& b){
         return a.Count() == b.Count() ? a < b : a.Count() < b.Count();
       });
+      boards[i].resize(std::unique(boards[i].begin(), boards[i].end()) - boards[i].begin());
     }
   }).wait();
   spdlog::info("Sorting finished");
@@ -77,6 +73,19 @@ void SplitBoards(const std::filesystem::path& fname) {
     spdlog::info("Writing group {} with {} boards", group, boards[group].size());
     ClassWriter<CompactBoard> writer(BoardPath(group));
     writer.Write(boards[group]);
+  }
+}
+
+} // namespace
+
+void SplitBoards(const std::filesystem::path& fname, bool is_compressed) {
+  spdlog::info("Start preprocessing");
+  if (is_compressed) {
+    CompressedClassReader<CompactBoard> reader(fname);
+    SplitBoards(reader);
+  } else {
+    ClassReader<CompactBoard> reader(fname);
+    SplitBoards(reader);
   }
   spdlog::info("Done preprocessing");
 }

@@ -2,6 +2,17 @@
 
 #include <algorithm>
 
+#ifdef TESTING_EVAL
+#ifdef LINE_CAP
+#undef LINE_CAP
+#endif
+#ifdef NO_2KS
+#define LINE_CAP 46
+#else
+#define LINE_CAP 58
+#endif // NO_2KS
+#endif // TESTING_EVAL
+
 #ifdef NO_2KS
 constexpr int kLevels = 3;
 #else
@@ -12,7 +23,7 @@ constexpr int kLevels = 4;
 constexpr int kLineCap = LINE_CAP;
 #else
 constexpr int kLineCap = 430;
-#if !defined(TESTING) && !defined(NO_ROTATION)
+#ifndef NO_ROTATION
 #warning "Line cap not defined. Setting to 430."
 #endif
 #endif
@@ -153,6 +164,15 @@ constexpr int GetFramesPerRow(int level) {
 
 } // namespace noro
 
+#ifdef TESTING_EVAL
+constexpr int kLevelSpeedLines[] = {0, 22, 34,
+#ifdef NO_2KS
+  kLineCap
+#else
+  46, kLineCap
+#endif // NO_2KS
+};
+#else // !TESTING_EVAL
 constexpr int kLevelSpeedLines[] = {0, 130, 230,
 #ifdef NO_2KS
   kLineCap
@@ -160,6 +180,7 @@ constexpr int kLevelSpeedLines[] = {0, 130, 230,
   330, kLineCap
 #endif // NO_2KS
 };
+#endif // TESTING_EVAL
 
 constexpr int GetLevelByLines(int lines) {
   if (lines < 130) return 18;
@@ -238,12 +259,14 @@ static_assert(noro::GetLevelByLines(100, 15) == 16);
 static_assert(noro::GetLevelByLines(109, 16) == 16);
 static_assert(noro::GetLevelByLines(110, 16) == 17);
 
+#ifndef TESTING_EVAL
 static_assert(GetLevelByLines(kLevelSpeedLines[0]) == 18);
 static_assert(GetLevelByLines(kLevelSpeedLines[1]) == 19);
 static_assert(GetLevelByLines(kLevelSpeedLines[2]) == 29);
 #ifndef NO_2KS
 static_assert(GetLevelByLines(kLevelSpeedLines[3]) == 39);
 #endif // NO_2KS
+#endif // TESTING_EVAL
 
 static_assert(GetGroupByPieces(0) == 0);
 #ifdef TETRIS_ONLY

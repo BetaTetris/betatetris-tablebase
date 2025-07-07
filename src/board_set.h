@@ -17,7 +17,7 @@ using BoardMap = tsl::sparse_map<BoardTmpl<8>, uint64_t, std::hash<Board>, std::
       std::allocator<BoardMapKey>, tsl::sh::power_of_two_growth_policy<2>,
       tsl::sh::exception_safety::basic, tsl::sh::sparsity::high>;
 
-void SplitBoards(const std::filesystem::path&);
+void SplitBoards(const std::filesystem::path&, bool is_compressed = false);
 
 template <class Func> void ProcessBoards(int group, Func&& f) {
   constexpr size_t kBlock = 65536;

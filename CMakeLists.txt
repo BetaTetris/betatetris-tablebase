@@ -99,17 +99,26 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable_Exclude(argparse spdlog eigen sparse_map hopscotch_map boost)
 
+# scripts
+add_executable(filter_boards scripts/filter_boards.cpp src/files.cpp src/config.cpp)
+target_link_libraries(filter_boards zstd)
+
 add_executable(random_boards scripts/random_boards.cpp)
+
 add_executable(board_merge scripts/board_merge.cpp)
 target_link_libraries(board_merge tsl::sparse_map)
+
 add_executable(test_speed scripts/test_speed.cpp)
 target_link_libraries(test_speed eigen)
+target_compile_definitions(test_speed PRIVATE "-DLINE_CAP=430")
 
+# main
 file(GLOB MAIN_SRC "src/*.cpp")
 add_executable(main ${MAIN_SRC})
 
 set(CXX_DEFS "-DTAP_SPEED=${TAP_SPEED} -DADJ_DELAY=${ADJ_DELAY} -DLINE_CAP=${LINE_CAP}")
 set(CXX_TEST_DEFS "-DTESTING=1 -DTAP_SPEED=Tap30Hz -DADJ_DELAY=18 -DLINE_CAP=430 -DDOUBLE_TUCK")
+set(CXX_TEST_EVAL_DEFS "-DTESTING=1 -DTESTING_EVAL=1 -DTAP_SPEED=Tap30Hz -DADJ_DELAY=30 -DNO_2KS -DTETRIS_ONLY -DBOARD_FILE=${CMAKE_CURRENT_SOURCE_DIR}/test/eval/data/boards")
 if(NO_2KS)
   string(APPEND CXX_DEFS " -DNO_2KS")
 endif()
@@ -122,10 +131,12 @@ endif()
 message(STATUS "Build parameters: ${CXX_DEFS}")
 separate_arguments(CXX_DEFS)
 separate_arguments(CXX_TEST_DEFS)
+separate_arguments(CXX_TEST_EVAL_DEFS)
 
 target_compile_definitions(main PRIVATE ${CXX_DEFS})
 target_link_libraries(main argparse::argparse spdlog::spdlog zstd eigen tsl::sparse_map tsl::hopscotch_map Boost::asio)
 
+# test
 if(BUILD_TESTS)
   enable_testing()
   FetchContent_Declare(
@@ -140,6 +151,14 @@ if(BUILD_TESTS)
   target_link_libraries(run-test gtest_main zstd tsl::sparse_map tsl::hopscotch_map)
   target_compile_definitions(run-test PRIVATE ${CXX_TEST_DEFS})
 
+  file(GLOB TEST_EVAL_SRC
+      "test/main.cpp" "test/eval/*.cpp"
+      "src/files.cpp" "src/config.cpp" "src/board_set.cpp" "src/move.cpp" "src/evaluate.cpp")
+  add_executable(run-test-eval ${TEST_EVAL_SRC})
+  target_link_libraries(run-test-eval gtest_main zstd tsl::sparse_map tsl::hopscotch_map spdlog::spdlog)
+  target_compile_definitions(run-test-eval PRIVATE ${CXX_TEST_EVAL_DEFS})
+
   include(GoogleTest)
   gtest_discover_tests(run-test)
+  gtest_discover_tests(run-test-eval)
 endif()
