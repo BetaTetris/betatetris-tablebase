@@ -94,10 +94,12 @@ BoardMap GetBoardMap(int group) {
   auto fname = BoardPath(group);
   size_t num_boards = BoardCount(fname);
 
-  BoardMap ret;
-  ret.reserve(num_boards);
+  BoardMap ret(num_boards / 0.4);
+  ProcessBoards(group, [&](Board&& b) { ret.insert_phase1(b); });
+  ret.finish_phase1();
   size_t i = 0;
-  ProcessBoards(group, [&](Board&& b) { ret[b] = i++; });
+  ProcessBoards(group, [&](Board&& b) { ret.insert_phase2(b, i++); });
+  ret.finish_phase2();
   return ret;
 }
 
@@ -156,7 +158,7 @@ inline std::pair<EvaluateNodeEdges, PositionNodeEdges> GetEdges(
         continue; // only tetrises are allowed
       } else // ... if
 #endif
-      if (auto board_it = mp.find(n_board.second); board_it != mp.end()) { // nexts
+      if (auto board_it = mp.find(n_board.second); board_it) { // nexts
         eval_ed.next_ids.emplace_back(board_it->second, n_board.first);
         pos_ed.nexts.push_back(pos);
         mp_idx[idx] = cnt++;
@@ -303,7 +305,6 @@ void BuildEdges(int group) {
 } // namespace
 
 void BuildEdges(const std::vector<int>& groups) {
-  std::array<BoardMap, kGroups> maps;
   for (int i : groups) BuildEdges(i);
 }
 

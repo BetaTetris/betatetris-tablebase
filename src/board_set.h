@@ -2,20 +2,14 @@
 
 #include <vector>
 #include <filesystem>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdangling-reference"
-#include <tsl/sparse_map.h>
-#pragma GCC diagnostic pop
 
 #include "io.h"
 #include "game.h"
 #include "board.h"
 #include "files.h"
+#include "sparse_map.h"
 
-using BoardMapKey = std::pair<BoardTmpl<8>, uint64_t>;
-using BoardMap = tsl::sparse_map<BoardTmpl<8>, uint64_t, std::hash<Board>, std::equal_to<Board>,
-      std::allocator<BoardMapKey>, tsl::sh::power_of_two_growth_policy<2>,
-      tsl::sh::exception_safety::basic, tsl::sh::sparsity::high>;
+using BoardMap = StaticSparseMap<BoardTmpl<8>, uint64_t>;
 
 void SplitBoards(const std::filesystem::path&, bool is_compressed = false);
 
