@@ -25,6 +25,6 @@ TEST(PipelineTest, PipelineTest) {
   kParallel = 10;
   MergeMoveRanges(0, 54, true);
   MergeMoveRanges(54, 111, true);
-  MergeMoveRanges(111, 165, true);
+  MergeMoveRanges(111, 138, true);
   MergeFullMoveRanges(true);
 }

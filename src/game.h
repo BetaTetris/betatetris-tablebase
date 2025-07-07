@@ -199,7 +199,14 @@ constexpr Level GetLevelSpeed(int level) {
 }
 
 constexpr auto GetLevelSpeedByLines(int lines) {
-  return GetLevelSpeed(GetLevelByLines(lines));
+  if (lines < kLevelSpeedLines[1]) return kLevel18;
+  if (lines < kLevelSpeedLines[2]) return kLevel19;
+#ifdef NO_2KS
+  return kLevel29;
+#else
+  if (lines< kLevelSpeedLines[3]) return kLevel29;
+  return kLevel39;
+#endif // NO_2KS
 }
 
 constexpr int GameScore(int base_lines, int lines) {
@@ -209,7 +216,7 @@ constexpr int GameScore(int base_lines, int lines) {
 constexpr float TablebaseScore(int base_lines, int lines) {
 #ifdef TETRIS_ONLY
   return (base_lines < kLineCap && base_lines + lines >= kLineCap) * 1e-9 +
-         (base_lines < 230 && base_lines + lines >= 230);
+         (base_lines < kLevelSpeedLines[2] && base_lines + lines >= kLevelSpeedLines[2]);
 #else
   return GameScore(base_lines, lines);
 #endif // TETRIS_ONLY

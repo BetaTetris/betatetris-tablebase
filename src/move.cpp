@@ -164,8 +164,7 @@ void CalculateSameLines(
   constexpr size_t kBatchSize = 1024;
   constexpr size_t kBlockSize = 524288;
 
-  int level = GetLevelByLines(lines);
-  auto fname = EvaluateEdgePath(group, GetLevelSpeed(level));
+  auto fname = EvaluateEdgePath(group, GetLevelSpeedByLines(lines));
   using Result = std::pair<size_t, size_t>;
 
   std::vector<NodeMoveIndex> out_idx;
