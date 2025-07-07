@@ -176,23 +176,24 @@ inline std::pair<EvaluateNodeEdges, PositionNodeEdges> GetEdges(
   size_t adj_eds = 0;
   auto& stats = edge_stats[level];
   {
+    uint8_t ids[256];
     std::vector<Position> pos_adj;
     for (const auto& adj : moves.adj) {
-      std::vector<uint8_t> ids;
+      uint8_t sz = 0;
       for (const auto& pos : adj.second) {
         if (uint8_t idx = mp_idx[pos.Index()]; idx != 255) {
-          ids.push_back(idx);
+          ids[sz++] = idx;
         }
       }
-      if (ids.empty()) continue;
-      eval_ed.adj.push_back(std::move(ids));
+      if (sz == 0) continue;
+      eval_ed.adj.emplace_back(ids, ids + sz);
       pos_adj.push_back(adj.first);
-      ids.clear();
     }
     stats.adj_orig += eval_ed.adj.size();
     const auto adj_mp = eval_ed.ReduceAdj();
     for (const auto& i : adj_mp) {
       pos_ed.adj.emplace_back();
+      pos_ed.adj.back().reserve(i.size());
       for (const auto& j : i) pos_ed.adj.back().push_back(pos_adj[j]);
     }
     for (auto& i : eval_ed.adj) adj_eds += i.size();

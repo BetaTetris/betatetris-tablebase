@@ -162,7 +162,7 @@ void CalculateSameLines(
     MoveEval out[], CompressedClassWriter<NodeMoveIndex>* idx_writer_ptr,
     std::optional<std::thread>& writer_thread) {
   constexpr size_t kBatchSize = 1024;
-  constexpr size_t kBlockSize = 524288;
+  constexpr size_t kBlockSize = 262144;
 
   auto fname = EvaluateEdgePath(group, GetLevelSpeedByLines(lines));
   using Result = std::pair<size_t, size_t>;
@@ -184,21 +184,21 @@ void CalculateSameLines(
   std::deque<std::function<Result()>> works;
 
   std::vector<std::thread> thrs;
-  for (size_t block_start = start; block_start < end; block_start += kBlockSize) {
-    size_t block_end = std::min(end, block_start + kBlockSize);
+  for (size_t block_start = start; block_start < end;) {
+    size_t block_end = std::min(end, (block_start / kBlockSize * kBlockSize) + kBlockSize);
     unfinished++;
     io_pool.push_task([&fname,&thread_queue,&works,&unfinished,&cv,&mtx,block_start,block_end,start,&prev,lines,out,&out_idx]() {
       CompressedClassReader<EvaluateNodeEdgesFast> reader(fname);
       reader.Seek(block_start * kPieces);
-      for (size_t batch_l = block_start; batch_l < block_end; batch_l += kBatchSize) {
-        size_t batch_r = std::min(block_end, batch_l + kBatchSize);
+      for (size_t batch_l = block_start; batch_l < block_end;) {
+        size_t batch_r = std::min(block_end, (batch_l / kBatchSize * kBatchSize) + kBatchSize);
         size_t num_to_read = (batch_r - batch_l) * kPieces;
         std::unique_ptr<EvaluateNodeEdgesFast[]> edges(new EvaluateNodeEdgesFast[num_to_read]);
         if (num_to_read != reader.ReadBatch(edges.get(), num_to_read)) throw std::runtime_error("read failure");
         {
           std::lock_guard lck(mtx);
           works.push_back(make_copyable_function([
-                edges=std::move(edges),&works,&unfinished,&cv,&mtx,num_to_read,start,batch_l,batch_r,&prev,lines,out,&out_idx
+              edges=std::move(edges),&works,&unfinished,&cv,&mtx,num_to_read,start,batch_l,batch_r,&prev,lines,out,&out_idx
           ]() {
             auto out_ptr = calculate_moves ? out_idx.data() + (batch_l - start) * kPieces : nullptr;
             CalculateBlock<calculate_moves>(edges.get(), num_to_read, prev, lines, out + batch_l, out_ptr);
@@ -206,6 +206,7 @@ void CalculateSameLines(
           }));
         }
         cv.notify_one();
+        batch_l = batch_r;
       }
       {
         std::lock_guard lck(mtx);
@@ -213,6 +214,7 @@ void CalculateSameLines(
       }
       cv.notify_one();
     });
+    block_start = block_end;
   }
   {
     std::unique_lock lck(mtx);
