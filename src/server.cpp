@@ -94,7 +94,7 @@ class FCEUXConnection : public std::enable_shared_from_this<FCEUXConnection>, pu
     if (strat[0] == Position::Invalid || done) {
       if (!done) spdlog::info("Not a seen board; topping out");
       done = true;
-      prev_strats[0] = {-1, 0, 0};
+      prev_strats[0] = Position::Invalid;
       SendSeq({});
       return;
     }
@@ -109,7 +109,7 @@ class FCEUXConnection : public std::enable_shared_from_this<FCEUXConnection>, pu
       auto seq = game.GetSequence(strat[0]);
       prev_pos = strat[0];
       prev_seq.clear();
-      prev_strats = {Position::Invalid};
+      prev_strats[0] = Position::Invalid;
       SendSeq(seq);
       SendSeq({});
     }

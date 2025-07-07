@@ -442,7 +442,7 @@ NOINLINE constexpr void SearchTucks(
       Column tuck_lock_positions = (after_tuck_positions + cur) >> 1 & (cur & ~cur >> 1) & ~lock_positions_without_tuck[rot][col];
       while (tuck_lock_positions) {
         int row = ctz(tuck_lock_positions);
-        positions[sz++] = {rot, row, col};
+        positions[sz++] = Position(rot, row, col);
         tuck_lock_positions ^= 1 << row;
       }
     }
@@ -467,7 +467,7 @@ constexpr void CheckOneInitial(
   if (!is_adj && lock_frame > end_frame) {
     can_adj = true;
   } else {
-    positions[sz++] = {entry.rot, lock_row, entry.col};
+    positions[sz++] = Position(entry.rot, lock_row, entry.col);
   }
   int first_tuck_frame = initial_frame + taps[entry.num_taps];
   int last_tuck_frame = std::min(lock_frame, end_frame);
@@ -548,7 +548,7 @@ inline PossibleMoves MoveSearchInternal(
         true, entry.num_taps, level, adj_frame, taps, table.adj[i], board, cols, tuck_masks, can_adj, buf);
     if (x) {
       int row = GetRow(std::max(adj_frame, taps[entry.num_taps]), level);
-      ret.adj.emplace_back(Position{entry.rot, row, entry.col}, std::vector<Position>(buf, buf + x));
+      ret.adj.emplace_back(Position(entry.rot, row, entry.col), std::vector<Position>(buf, buf + x));
     }
   }
   return ret;

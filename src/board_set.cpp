@@ -133,47 +133,41 @@ struct EdgeStats {
 
 inline std::pair<EvaluateNodeEdges, PositionNodeEdges> GetEdges(
     const Board& b, int piece, const PossibleMoves& moves, const BoardMap& mp, int level) {
-  constexpr uint64_t kNone = std::numeric_limits<uint64_t>::max();
   // use position as key; note that multiple positions may lead to same board
-  tsl::hopscotch_map<Position, std::pair<uint64_t, uint8_t>> mp_next;
-  mp_next.reserve(48);
-  for (auto& pos : moves.non_adj) mp_next[pos] = {kNone, 0};
-  for (auto& adj : moves.adj) {
-    for (auto& pos : adj.second) mp_next[pos] = {kNone, 0};
-  }
-  for (auto item = mp_next.begin(); item != mp_next.end();) {
-    auto n_board = b.Place(piece, item->first.r, item->first.x, item->first.y).ClearLines();
-#ifdef TETRIS_ONLY
-    if (n_board.first && n_board.first != 4) {
-      item = mp_next.erase(item); // only tetrises are allowed
-    } else // ... if
-#endif
-    if (auto board_it = mp.find(n_board.second); board_it != mp.end()) {
-      item.value() = {board_it->second, n_board.first};
-      ++item;
-    } else {
-      item = mp_next.erase(item);
-    }
-  }
-  tsl::hopscotch_map<Position, uint8_t> mp_idx;
+  uint8_t mp_idx[800];
+  memset(mp_idx, 255, 800);
   EvaluateNodeEdges eval_ed;
   PositionNodeEdges pos_ed;
-  eval_ed.cell_count = b.Count();
-  { // nexts
-    uint8_t idx = 0;
-    mp_idx.reserve(mp_next.size());
-    eval_ed.next_ids.reserve(mp_next.size());
-    pos_ed.nexts.reserve(mp_next.size());
-    for (auto& item : mp_next) {
-      eval_ed.next_ids.push_back(item.second);
-      pos_ed.nexts.push_back(item.first);
-      mp_idx[item.first] = idx++;
+  { // build map
+    constexpr size_t kSlots = (800 + 63) / 64;
+    uint64_t pos_mp[kSlots] = {};
+    auto Mark = [&](int pos) { pos_mp[pos >> 6] |= 1ll << (pos & 63); };
+    for (auto& pos : moves.non_adj) Mark(pos.Index());
+    for (auto& adj : moves.adj) {
+      for (auto& pos : adj.second) Mark(pos.Index());
     }
+    uint8_t cnt = 0;
+    for (size_t i = 0; i < kSlots; i++) for (uint64_t val = pos_mp[i]; val; val ^= val & -val) {
+      uint32_t idx = i * 64 + ctz<uint64_t>(val);
+      Position pos = Position::FromIndex(idx);
+      auto n_board = b.Place(piece, pos.r, pos.x, pos.y).ClearLines();
+#ifdef TETRIS_ONLY
+      if (n_board.first && n_board.first != 4) {
+        continue; // only tetrises are allowed
+      } else // ... if
+#endif
+      if (auto board_it = mp.find(n_board.second); board_it != mp.end()) { // nexts
+        eval_ed.next_ids.emplace_back(board_it->second, n_board.first);
+        pos_ed.nexts.push_back(pos);
+        mp_idx[idx] = cnt++;
+      }
+    }
+    eval_ed.cell_count = b.Count();
   }
   // non-adjs
   for (const auto& pos : moves.non_adj) {
-    if (auto it = mp_idx.find(pos); it != mp_idx.end()) {
-      eval_ed.non_adj.push_back(it->second);
+    if (uint8_t idx = mp_idx[pos.Index()]; idx != 255) {
+      eval_ed.non_adj.push_back(idx);
     }
   }
   // adjs
@@ -184,8 +178,8 @@ inline std::pair<EvaluateNodeEdges, PositionNodeEdges> GetEdges(
     for (const auto& adj : moves.adj) {
       std::vector<uint8_t> ids;
       for (const auto& pos : adj.second) {
-        if (auto it = mp_idx.find(pos); it != mp_idx.end()) {
-          ids.push_back(it->second);
+        if (uint8_t idx = mp_idx[pos.Index()]; idx != 255) {
+          ids.push_back(idx);
         }
       }
       if (ids.empty()) continue;

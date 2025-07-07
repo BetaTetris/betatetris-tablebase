@@ -48,11 +48,11 @@ constexpr bool IsDropFrame(int frame, Level level) {
 inline std::pair<bool, Position> FreeDrop(const std::vector<ByteBoard>& b, int rot, int row, int col, Level level, int max_frame) {
   int max_row = GetRow(max_frame, level);
   while (row < max_row && row < 19 && b[rot][row+1][col]) row++;
-  return {row >= max_row, {rot, row, col}};
+  return {row >= max_row, Position(rot, row, col)};
 }
 inline Position FreeDrop(const std::vector<ByteBoard>& b, int rot, int row, int col) {
   while (row < 19 && b[rot][row+1][col]) row++;
-  return {rot, row, col};
+  return Position(rot, row, col);
 }
 constexpr int kFinish = 1000;
 
