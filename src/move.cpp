@@ -582,11 +582,17 @@ void RunCalculateThreshold(
   }
 
   std::vector<MoveEval> values = LoadValues(start_pieces, offsets);
+  std::optional<std::thread> threshold_writer;
   for (int pieces = start_pieces - 1; pieces >= end_pieces; pieces--) {
     int group = GetGroupByPieces(pieces);
-    values = CalculatePieceMoves<false>(pieces, values, offsets[group]);
-    WriteThreshold(pieces, offsets[group], values, name, threshold, start_ratio, end_ratio, buckets);
+    auto new_values = CalculatePieceMoves<false>(pieces, values, offsets[group]);
+    if (threshold_writer) threshold_writer->join();
+    values = std::move(new_values);
+    threshold_writer.emplace([pieces,group,&offsets,&values,&name,&threshold,start_ratio,end_ratio,&buckets]() {
+      WriteThreshold(pieces, offsets[group], values, name, threshold, start_ratio, end_ratio, buckets);
+    });
   }
+  if (threshold_writer) threshold_writer->join();
 }
 
 void MergeThresholdRanges(const std::string& name, int pieces_l, int pieces_r, bool delete_after) {
