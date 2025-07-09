@@ -300,10 +300,11 @@ def worker_process(remote, q_size, offset, seed_queue, shms):
                         assert(len(result) == 22 * sz)
                         for j in range(sz):
                             resp.append(result[22*j:22*(j+1)])
-                    for x, i in enumerate(np.nonzero(status[:,2])[0]):
+                    for idx, i in enumerate(np.nonzero(status[:,2])[0]):
                         offset = 3 * games[i].env.GetNextPiece()
-                        r, x, y = resp[x][offset:offset+3]
-                        if (r, x, y) == (0, 0, 0):
+                        r, x, y = resp[idx][offset:offset+3]
+                        thr = resp[idx][21]
+                        if (r, x, y) == (0, 0, 0) or thr < args.threshold:
                             status[i,2] = False
                         else:
                             if not games[i].step(r*200 + x*10 + y, direct=True):
@@ -370,7 +371,7 @@ def Main(models):
     if args.seed_file:
         with open(args.seed_file, 'r') as f: seeds = list(map(int, f))
     else:
-        seeds = random.sample(range(512, 2 ** 24) if args.gym_rng else range(2 ** 60), N)
+        seeds = random.sample([i for i in range(512, 2 ** 24) if (i & 8) == 0] if args.gym_rng else range(2 ** 60), N)
     if args.sample_file:
         boards = []
         with open(args.sample_file, 'rb', buffering=1048576) as f:
@@ -484,12 +485,13 @@ if __name__ == "__main__":
         parser.add_argument('--adj-delay', type=int, default=18, choices=ADJ_DELAYS)
         parser.add_argument('--tap-speed', type=str, default='30hz', choices=list(TAP_SEQUENCE_MAP))
         parser.add_argument('--aggression', type=str, default='high', choices=list(AGGRESSION_LEVEL_MAP))
+        parser.add_argument('-s', '--server', type=str)
+        parser.add_argument('--threshold', type=int, default=0)
     parser.add_argument('-m', '--max-lines', type=int)
     parser.add_argument('--keep-lines', type=int)
     parser.add_argument('-b', '--batch-size', type=int, default=512)
     parser.add_argument('-w', '--workers', type=int, default=2)
     parser.add_argument('-o', '--output', type=str)
-    parser.add_argument('-s', '--server', type=str)
     parser.add_argument('--line-clear-history', action='store_true')
     parser.add_argument('--detailed-history', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
@@ -498,8 +500,8 @@ if __name__ == "__main__":
     parser.add_argument('--realistic-rng', action='store_true')
     parser.add_argument('--clean-only', action='store_true')
     parser.add_argument('--sample-action', action='store_true')
-    parser.add_argument('--board-file', type = str)
-    parser.add_argument('--sample-file', type = str)
+    parser.add_argument('--board-file', type=str)
+    parser.add_argument('--sample-file', type=str)
     parser.add_argument('--start-from-board', action='store_true')
     parser.add_argument('--compile-model', action='store_true')
     args = parser.parse_args()
