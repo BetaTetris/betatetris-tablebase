@@ -13,6 +13,7 @@
 #include "constexpr_helpers.h"
 
 constexpr size_t kPieces = 7;
+constexpr char kPieceNames[] = "TJZOSLI";
 
 template <size_t Align> class alignas(Align) BoardTmpl;
 using Board = BoardTmpl<32>;
@@ -690,7 +691,7 @@ class alignas(Align) BoardTmpl {
     static constexpr char kRotMarks[7][5] = {
       "dlur", "dlur", "--", "-", "--", "dlur", "--"
     };
-    std::string ret{"TJZOSLI"[piece]};
+    std::string ret{kPieceNames[piece]};
     ret += kRotMarks[piece][r];
     if (kRotMarks[piece][r] != '-') ret += '-';
     for (int i = y + kColOffsets[piece][r][0]; i < y + kColOffsets[piece][r][1]; i++) {

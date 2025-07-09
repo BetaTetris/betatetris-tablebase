@@ -430,6 +430,13 @@ int main(int argc, char** argv) {
   inspect_move.add_description("Get move by shape");
   DataDirArg(inspect_move);
 
+  ArgumentParser inspect_move_tree("move-tree", "", default_arguments::help);
+  inspect_move_tree.add_description("Get move tree by shape");
+  inspect_move_tree.add_argument("-d", "--depth").required()
+    .help("Print depth")
+    .scan<'i', int>();
+  DataDirArg(inspect_move_tree);
+
   inspect.add_subparser(inspect_board);
   inspect.add_subparser(inspect_board_id);
   inspect.add_subparser(inspect_board_stats);
@@ -437,6 +444,7 @@ int main(int argc, char** argv) {
   inspect.add_subparser(inspect_edge_stats);
   inspect.add_subparser(inspect_value);
   inspect.add_subparser(inspect_move);
+  inspect.add_subparser(inspect_move_tree);
 
   program.add_subparser(preprocess);
   program.add_subparser(board_map);
@@ -503,6 +511,8 @@ int main(int argc, char** argv) {
         std::cerr << inspect_value;
       } else if (subparser.is_subcommand_used("move")) {
         std::cerr << inspect_move;
+      } else if (subparser.is_subcommand_used("move-tree")) {
+        std::cerr << inspect_move_tree;
       } else {
         std::cerr << inspect;
       }
@@ -736,8 +746,17 @@ int main(int argc, char** argv) {
           std::stringstream ss(line);
           std::string tmp;
           int piece, lines;
-          ss >> tmp >> piece >> lines;
-          InspectMove(str, piece, lines);
+          if (ss >> tmp >> piece >> lines) InspectMove(str, piece, lines);
+        });
+      } else if (subparser.is_subcommand_used("move-tree")) {
+        auto& args = subparser.at<ArgumentParser>("move-tree");
+        SetDataDir(args);
+        int depth = args.get<int>("--depth");
+        ReadBoards([depth](const std::string& str, const std::string& line) {
+          std::stringstream ss(line);
+          std::string tmp;
+          int lines;
+          if (ss >> tmp >> lines) InspectMoveTree(str, lines, depth);
         });
       } else {
         std::cerr << inspect;

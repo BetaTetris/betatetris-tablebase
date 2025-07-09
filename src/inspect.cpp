@@ -186,12 +186,64 @@ void InspectBoard(const std::string& str) {
   }
 }
 
-void InspectMove(const std::string& str, int now_piece, int lines) {
+void InspectMove(const std::string& str, int now_piece, int lines, bool notation) {
   Play play;
   Board b(str);
   auto res = play.GetStrat(b.ToBytes(), now_piece, lines);
   for (size_t i = 0; i < kPieces; i++) {
-    std::cout << res[i].r << ' ' << res[i].x << ' ' << res[i].y << '\n';
+    if (notation) {
+      std::cout << b.PlacementNotation(now_piece, res[i].r, res[i].x, res[i].y) << " \n"[i == kPieces - 1];
+    } else {
+      std::cout << res[i].r << ' ' << res[i].x << ' ' << res[i].y << '\n';
+    }
   }
   std::cout << std::flush;
+}
+
+namespace {
+
+void PrintMoveTree(
+    const Board& b, int cur_lines, int depth, int now_piece, Play& play,
+    std::string seq_str = "", std::string res_str = "") {
+  seq_str += kPieceNames[now_piece];
+  auto strat = play.GetStrat(b.ToBytes(), now_piece, cur_lines);
+  if (strat[0] == Position::Invalid) {
+    std::cout << seq_str << res_str + "\tOVER\n";
+    return;
+  }
+  if (depth == 0) {
+    std::cout << seq_str << res_str << '\t';
+    std::unordered_map<Position, std::vector<int>> mp;
+    for (size_t i = 0; i < kPieces; i++) mp[strat[i]].push_back(i);
+    if (mp.size() == 1) {
+      std::cout << b.PlacementNotation(now_piece, strat[0].r, strat[0].x, strat[0].y) << '\n';
+    } else {
+      std::vector<std::pair<std::vector<int>, Position>> vec;
+      for (auto& i : mp) vec.emplace_back(i.second, i.first);
+      std::sort(vec.begin(), vec.end());
+      std::string fin;
+      for (auto& [pieces, pos] : vec) {
+        fin += b.PlacementNotation(now_piece, pos.r, pos.x, pos.y) + ':';
+        for (int nxt : pieces) fin += kPieceNames[nxt];
+        fin += '|';
+      }
+      fin.pop_back();
+      std::cout << fin << '\n';
+    }
+    return;
+  }
+  for (size_t nxt = 0; nxt < kPieces; nxt++) {
+    auto& pos = strat[nxt];
+    auto nxt_board = b.Place(now_piece, pos.r, pos.x, pos.y).ClearLines();
+    PrintMoveTree(nxt_board.second, cur_lines + nxt_board.first, depth - 1, nxt, play,
+                  seq_str, res_str + '\t' + b.PlacementNotation(now_piece, pos.r, pos.x, pos.y));
+  }
+}
+
+} // namespace
+
+void InspectMoveTree(const std::string& str, int lines, size_t depth) {
+  Board b(str);
+  Play play;
+  for (size_t i = 0; i < kPieces; i++) PrintMoveTree(b, lines, depth < 1 ? 0 : depth - 1, i, play);
 }

@@ -98,7 +98,6 @@ std::vector<SimulateResult> Simulate(
   std::vector<SimulateResult> ret;
   std::unordered_set<SupervisedData> dataset;
   std::vector<SupervisedData> dataset_buf;
-  const char kPieceNames[] = "TJZOSLI";
   for (size_t i = 0; i < num; i++) {
     dataset_buf.clear();
     int seed = seeds[i];
