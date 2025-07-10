@@ -78,6 +78,7 @@ class Main:
         self.cur_game_params = game_params
 
     def set_weight_params(self):
+        self.cur_policy_weight = self.c.policy_weight()
         self.cur_entropy_weight = self.c.entropy_weight()
         self.cur_raw_weight = self.c.raw_weight()
         self.cur_raw_avg_weight = self.c.raw_avg_weight()
@@ -85,6 +86,7 @@ class Main:
         self.cur_low_prob_weight = self.c.low_prob_weight()
         self.cur_low_prob_threshold = self.c.low_prob_threshold()
         self.cur_supervised_weight = self.c.supervised_weight()
+        self.cur_supervised_batch_size = self.c.supervised_batch_size()
 
     def destroy(self):
         self.generator.Close()
@@ -110,10 +112,10 @@ class Main:
                     with torch.no_grad():
                         for k, v in samples.items():
                             if k == 'obs':
-                                if self.supervised:
+                                if self.supervised and self.cur_supervised_batch_size:
                                     # somehow if we call the model multiple times the results are messed up
                                     # so we concat supervised & self-play data into the same tensor
-                                    x, y = self.supervised.ReadBatch(self.c.supervised_batch_size)
+                                    x, y = self.supervised.ReadBatch(self.cur_supervised_batch_size)
                                     x = obs_to_torch(x, device)
                                     mini_batch['supervised_y'] = torch.tensor(y, device=device)
                                     mini_batch[k] = [torch.cat([i[mini_batch_indexes], j]) for i, j in zip(v, x)]
@@ -158,10 +160,10 @@ class Main:
         """## PPO Loss"""
         # Sampled observations are fed into the model to get $\pi_\theta(a_t|s_t)$ and $V^{\pi_\theta}(s_t)$;
         pi_logits, value = self.model_opt(samples['obs'])
-        if self.supervised:
-            sup_pi_logits = pi_logits[-self.c.supervised_batch_size:]
-            pi_logits = pi_logits[:-self.c.supervised_batch_size]
-            value = value[:,:-self.c.supervised_batch_size]
+        if self.supervised and self.cur_supervised_batch_size:
+            sup_pi_logits = pi_logits[-self.cur_supervised_batch_size:]
+            pi_logits = pi_logits[:-self.cur_supervised_batch_size]
+            value = value[:,:-self.cur_supervised_batch_size]
         pi = Categorical(logits=pi_logits)
         raw_dist = Normal(value[1], F.softplus(value[2], beta=1e3).clamp(min=1e-5))
         raw_dev = value[2]
@@ -241,10 +243,10 @@ class Main:
         # F.cross_entropy does not deal with -inf properly
         def cross_entropy(logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
             log_probs = torch.log_softmax(logits, dim=1)
-            log_probs = torch.where(target == 0, torch.zeros_like(log_probs), log_probs)
-            loss_per_sample = -(target * log_probs).sum(dim=1)
+            log_probs = torch.where(torch.isinf(logits), torch.zeros_like(log_probs), log_probs)
+            loss_per_sample = -((target + 1e-6) * log_probs).sum(dim=1)
             return loss_per_sample.mean()
-        if self.supervised:
+        if self.supervised and self.cur_supervised_batch_size:
             supervised_loss = cross_entropy(sup_pi_logits, samples['supervised_y'])
         else:
             supervised_loss = 0
@@ -252,7 +254,7 @@ class Main:
         # we want to maximize $\mathcal{L}^{CLIP+VF+EB}(\theta)$
         # so we take the negative of it as the loss
         loss = (
-            -policy_reward
+            -self.cur_policy_weight * policy_reward
             -self.cur_entropy_weight * entropy_bonus
             +self.cur_low_prob_weight * high_prob_penalty
             +self.cur_vf_weight * vf_loss

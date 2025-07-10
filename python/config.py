@@ -2,7 +2,7 @@ import os, argparse
 from typing import Optional
 
 from labml import experiment
-from labml.configs import BaseConfigs, FloatDynamicHyperParam
+from labml.configs import BaseConfigs, FloatDynamicHyperParam, IntDynamicHyperParam
 
 class Configs(BaseConfigs):
     # #### Configurations
@@ -32,13 +32,14 @@ class Configs(BaseConfigs):
     n_update_per_epoch: int = 32
     # calculate loss in batches of mini_batch_size
     mini_batch_size: int = 800
-    supervised_batch_size: int = 400
+    supervised_batch_size: int = IntDynamicHyperParam(400, range_ = (0, 4096))
     weight_sync_per_epoch: int = 2
 
     ## loss calculation
     use_kl: bool = False
     clipping_range: float = 0.2
     beta: float = 5.0
+    policy_weight: float = FloatDynamicHyperParam(1, range_ = (0, 5))
     vf_weight: float = FloatDynamicHyperParam(1, range_ = (0, 5))
     raw_weight: float = FloatDynamicHyperParam(0, range_ = (0, 1e-2))
     raw_avg_weight: float = FloatDynamicHyperParam(0, range_ = (0, 5))
@@ -83,6 +84,9 @@ def LoadConfig(with_experiment = True):
         ptype = type(conf.__getattribute__(key))
         if ptype == FloatDynamicHyperParam:
             ptype = float
+            dynamic_keys.add(key)
+        elif ptype == IntDynamicHyperParam:
+            ptype = int
             dynamic_keys.add(key)
         elif key in ['board_file', 'supervised_file']:
             ptype = str
