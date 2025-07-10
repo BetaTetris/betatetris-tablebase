@@ -39,7 +39,7 @@ class PythonSupervisedDataReader {
   MultiStateY st_y_;
 
   void PushItem_(const SupervisedData& data) {
-    auto Ind = [](const Position& a) { return a.r * 200 + a.x * 10 + a.y; };
+    auto Ind = [](const Position& a) { return a.r * 200 + a.x * 10 + a.y; }; // autopromotes
     Tetris game = data.GetGame(kTapTables[data.tag >> 3 & 7], kAdjDelays[data.tag & 7]);
     {
       State st{};

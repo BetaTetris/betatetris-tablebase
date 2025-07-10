@@ -657,7 +657,7 @@ class alignas(Align) BoardTmpl {
   }
 
   std::string ToString(bool invert = false, bool compact = true, bool row_numbers = true) const {
-    Board obj = invert ? ~*this : *this;
+    Board obj = invert ? ~*this : (Board)*this;
     uint64_t p = obj.b1 & obj.b2 & obj.b3 & (obj.b4 | ~(uint64_t)kColumnMask);
     uint32_t rows = ~(p & p >> 22 & p >> 44) & kColumnMask;
     int first_row = rows == 0 ? 20 : ctz(rows);

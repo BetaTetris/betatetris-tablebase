@@ -79,7 +79,7 @@ class PythonTetris {
 #elif defined(TETRIS_ONLY)
     ret.raw_reward = lines == 4 ? kRewardPerTetris_ : 0;
     ret.reward = ret.raw_reward + kStepReward_;
-    if (lines && lines < 4) ret.reward += lines * kBurnReward_;
+    // if (lines && lines < 4) ret.reward += lines * kBurnReward_;
     if (lines == 4 && pos.x >= 18) ret.reward *= kBottomMultiplier_;
     return ret;
 #else // normal

@@ -7,7 +7,7 @@
 struct PythonBoard {
   PyObject_HEAD
 
-  Board board;
+  BoardTmpl<8> board;
 
   template <class... Args> PythonBoard(Args&&... args) : board(std::forward<Args>(args)...) {}
   operator Board() const { return board; }

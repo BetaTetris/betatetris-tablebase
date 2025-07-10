@@ -26,7 +26,7 @@ bool CheckBoard(Board& board, PyObject* obj) {
 }
 
 PyObject* PositionToTuple(const Position& pos) {
-  return Py_BuildValue("(iii)", pos.r, pos.x, pos.y);
+  return Py_BuildValue("(bbb)", pos.r, pos.x, pos.y);
 }
 
 PyObject* FrameSequenceToArray(const FrameSequence& seq) {
@@ -112,7 +112,7 @@ int TetrisInit(PythonTetris* self, PyObject* args, PyObject* kwds) {
 PyObject* Tetris_InputPlacement(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"rotate", "x", "y", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "bbb", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return GetRewardObj(self->InputPlacement(pos));
@@ -122,7 +122,7 @@ PyObject* Tetris_InputPlacement(PythonTetris* self, PyObject* args, PyObject* kw
 PyObject* Tetris_DirectPlacement(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"rotate", "x", "y", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "bbb", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return GetRewardObj(self->DirectPlacement(pos));
@@ -276,7 +276,7 @@ PyObject* Tetris_GetState(PythonTetris* self, PyObject* args, PyObject* kwds) {
 PyObject* Tetris_GetAdjStates(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"rotate", "x", "y", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "bbb", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return self->GetAdjStates(pos).ToPython();
@@ -306,7 +306,7 @@ PyObject* Tetris_StateTypes(void*, PyObject* Py_UNUSED(ignored)) {
 PyObject* Tetris_GetSequence(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"rotate", "x", "y", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "bbb", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return FrameSequenceToArray(self->tetris.GetSequence(self->GetRealPosition(pos)));
@@ -316,7 +316,7 @@ PyObject* Tetris_GetSequence(PythonTetris* self, PyObject* args, PyObject* kwds)
 PyObject* Tetris_IsAdjMove(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"rotate", "x", "y", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "bbb", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return PyBool_FromLong(self->tetris.IsAdjMove(pos));
@@ -325,7 +325,7 @@ PyObject* Tetris_IsAdjMove(PythonTetris* self, PyObject* args, PyObject* kwds) {
 PyObject* Tetris_IsNoAdjMove(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"rotate", "x", "y", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "bbb", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return PyBool_FromLong(self->tetris.IsNoAdjMove(pos));
@@ -334,7 +334,7 @@ PyObject* Tetris_IsNoAdjMove(PythonTetris* self, PyObject* args, PyObject* kwds)
 PyObject* Tetris_GetAdjPremove(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"pos_list", nullptr};
   Position pos[7];
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "((iii)(iii)(iii)(iii)(iii)(iii)(iii))", (char**)kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "((bbb)(bbb)(bbb)(bbb)(bbb)(bbb)(bbb))", (char**)kwlist,
         &pos[0].r, &pos[0].x, &pos[0].y,
         &pos[1].r, &pos[1].x, &pos[1].y,
         &pos[2].r, &pos[2].x, &pos[2].y,
@@ -356,7 +356,7 @@ PyObject* Tetris_FinishAdjSequence(PythonTetris* self, PyObject* args, PyObject*
   static const char* kwlist[] = {"sequence", "intermediate_pos", "final_pos", nullptr};
   Position intermediate_pos, final_pos;
   PyObject* seq_obj;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O(iii)(iii)", (char**)kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O(bbb)(bbb)", (char**)kwlist,
         &seq_obj, &intermediate_pos.r, &intermediate_pos.x, &intermediate_pos.y,
         &final_pos.r, &final_pos.x, &final_pos.y)) {
     return nullptr;
@@ -412,7 +412,7 @@ PyObject* Tetris_GetRunPieces(PythonTetris* self, PyObject* Py_UNUSED(ignored)) 
 PyObject* Tetris_GetRealPosition(PythonTetris* self, PyObject* args, PyObject* kwds) {
   static const char* kwlist[] = {"pos", nullptr};
   Position pos;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "(iii)", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "(bbb)", (char**)kwlist, &pos.r, &pos.x, &pos.y)) {
     return nullptr;
   }
   return PositionToTuple(self->GetRealPosition(pos));
