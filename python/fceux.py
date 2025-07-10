@@ -13,6 +13,7 @@ stdscr = None
 args = None
 thresholds = None
 is_noro = tetris.Tetris.IsNoro()
+is_perfect = tetris.Tetris.IsTetrisOnly()
 
 
 def myprint(*pargs, posx=0, posy=0, clear=True, refresh=True):
@@ -77,7 +78,7 @@ class GameConn(socketserver.BaseRequestHandler):
             txt += 'TJZOSLI'[i] + ': ' + self.strat_text(strats[i], None if is_table else data[i]) + '\n'
         if is_table:
             txt += f'confidence {data}'
-            if thresholds:
+            if thresholds and is_perfect:
                 multiplier = (args.buckets - 2) / (args.ratio_high - args.ratio_low)
                 bias = 1 - args.ratio_low * multiplier
                 value_low = 0.0 if data == 0 else (data - bias) / multiplier
@@ -105,10 +106,12 @@ class GameConn(socketserver.BaseRequestHandler):
         myprint(txt, refresh=refresh)
 
     def query_tablebase(self):
+        lines = self.game.GetLines()
+        if is_perfect and lines >= 230: lines = lines % 4 + 232
         query = (
             bytes([1]) +
             self.game.GetBoard().GetBytes() +
-            bytes([self.game.GetNowPiece(), self.game.GetLines() % 256, self.game.GetLines() // 256])
+            bytes([self.game.GetNowPiece(), lines % 256, lines // 256])
         )
         self.board_conn.sendall(query)
         result = self.board_conn.recv(22)
@@ -118,11 +121,11 @@ class GameConn(socketserver.BaseRequestHandler):
         return adj_strats, level
 
     def get_strat_all(self):
-        if self.game.GetLines() < 230 and self.board_conn:
+        if self.board_conn:
             # tablebase
             adj_strats, level = self.query_tablebase()
             if not adj_strats[0] == (0, 0, 0):
-                stdscr.refresh()
+                if args.use_curses: stdscr.refresh()
                 if self.game.IsNoAdjMove(*adj_strats[0]):
                     return False, adj_strats[0]
                 return True, adj_strats
