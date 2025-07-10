@@ -108,6 +108,10 @@ add_executable(random_boards scripts/random_boards.cpp)
 add_executable(board_merge scripts/board_merge.cpp)
 target_link_libraries(board_merge tsl::sparse_map)
 
+add_executable(dataset_merge scripts/dataset_merge.cpp src/files.cpp src/config.cpp)
+target_link_libraries(dataset_merge zstd)
+target_compile_definitions(dataset_merge PRIVATE "-DLINE_CAP=430")
+
 add_executable(test_speed scripts/test_speed.cpp)
 target_link_libraries(test_speed eigen)
 target_compile_definitions(test_speed PRIVATE "-DLINE_CAP=430")
