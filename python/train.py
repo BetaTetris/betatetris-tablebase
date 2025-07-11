@@ -2,7 +2,7 @@
 
 # Modified from https://github.com/vpj/rl_samples
 
-import sys, traceback, os, collections, math, time, tempfile
+import sys, traceback, os, time, random
 from typing import Dict, List
 
 import numpy as np, torch
@@ -59,7 +59,8 @@ class Main:
         self.generator = GeneratorProcess(self.model_opt, self.name, self.c, cur_params, generator_device)
         self.set_game_params(cur_params)
         self.supervised = None
-        if self.c.supervised_file: self.supervised = tetris.SupervisedDataReader(self.c.supervised_file)
+        if self.c.supervised_file:
+            self.supervised = tetris.SupervisedDataReader(self.c.supervised_file, random.randint(0, 2 ** 32 - 1))
 
     def get_game_params(self):
         return (self.c.gamma(), self.c.lamda(), self.c.burn_over_multiplier(), self.c.board_ratio(), self.c.short_ratio())
@@ -86,6 +87,7 @@ class Main:
         self.cur_low_prob_weight = self.c.low_prob_weight()
         self.cur_low_prob_threshold = self.c.low_prob_threshold()
         self.cur_supervised_weight = self.c.supervised_weight()
+        self.cur_supervised_smooth = self.c.supervised_smooth()
         self.cur_supervised_batch_size = self.c.supervised_batch_size()
 
     def destroy(self):
@@ -244,7 +246,7 @@ class Main:
         def cross_entropy(logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
             log_probs = torch.log_softmax(logits, dim=1)
             log_probs = torch.where(torch.isinf(logits), torch.zeros_like(log_probs), log_probs)
-            loss_per_sample = -((target + 1e-6) * log_probs).sum(dim=1)
+            loss_per_sample = -((target + self.cur_supervised_smooth) * log_probs).sum(dim=1)
             return loss_per_sample.mean()
         if self.supervised and self.cur_supervised_batch_size:
             supervised_loss = cross_entropy(sup_pi_logits, samples['supervised_y'])

@@ -47,6 +47,7 @@ class Configs(BaseConfigs):
     low_prob_weight: float = FloatDynamicHyperParam(1e-2, range_ = (0, 1))
     entropy_weight: float = FloatDynamicHyperParam(1.5e-2, range_ = (0, 5e-2))
     supervised_weight: float = FloatDynamicHyperParam(0, range_ = (0, 10))
+    supervised_smooth: float = FloatDynamicHyperParam(1e-7, range_ = (0, 1e-2))
     reg_l2: float = FloatDynamicHyperParam(0., range_ = (0, 5e-5))
 
     burn_over_multiplier = FloatDynamicHyperParam(0., range_ = (0, 10))
