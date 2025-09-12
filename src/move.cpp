@@ -363,7 +363,7 @@ void MergeRanges(int group, int pieces_l, int pieces_r, const std::vector<size_t
     size_t end = std::min(buf.size(), (size_t)(kLineCap - start_lines + kGroupLineInterval - 1) / kGroupLineInterval);
     if (start_lines < 0) {
       start_lines_idx = 0;
-      begin = (-start_lines + 1) / kGroupLineInterval;
+      begin = std::min<size_t>(end, (-start_lines + 1) / kGroupLineInterval);
     }
     for (size_t x = 0; x < (offset[i + 1] - offset[i]) * kPieces; x++) {
       for (size_t j = 0; j < readers.size(); j++) readers[j].ReadOne(&buf[j]);

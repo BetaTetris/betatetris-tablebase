@@ -10,8 +10,8 @@ sources = ['tetris.cpp', 'state.cpp', 'board.cpp', 'supervised_reader.cpp', 'mod
 class build_ext_ex(build_ext):
     extra_compile_args = {
         'tetris': {
-            'unix': ['-std=c++20', '-DLINE_CAP=430', '-mbmi2'],
-            #'unix': ['-std=c++20', '-DLINE_CAP=290', '-mbmi2', '-DNO_2KS', '-DTETRIS_ONLY'],
+            #'unix': ['-std=c++20', '-DLINE_CAP=430', '-mbmi2'],
+            'unix': ['-std=c++20', '-DLINE_CAP=290', '-mbmi2', '-DNO_2KS', '-DTETRIS_ONLY'],
             #'unix': ['-std=c++20', '-mbmi2', '-DNO_ROTATION'],
             #'unix': ['-std=c++20', '-DLINE_CAP=430', '-mbmi2', '-fsanitize=address', '-fsanitize=undefined', '-O1'],
             'msvc': ['/std:c++20', '/DLINE_CAP=430', '/DADJ_DELAY=18', '/DTAP_SPEED=Tap30Hz'],
