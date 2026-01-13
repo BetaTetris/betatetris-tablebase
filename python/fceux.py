@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import sys, os.path, socketserver, argparse, re, socket
+import sys, os.path, socketserver, argparse, re, socket, time
 import numpy as np, torch
 import curses
 
 import tetris
 from model import Model, obs_to_torch
 from game_param import TAP_SEQUENCE_MAP, AGGRESSION_LEVEL_MAP, ADJ_DELAYS
+from culour import culour_addstr, reprint_line_bold
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 stdscr = None
@@ -38,7 +39,7 @@ def myprint(*pargs, posx=0, posy=0, clear=True, refresh=True):
     if args.use_curses:
         if clear: stdscr.clear()
         pstr = ' '.join(map(str, pargs))
-        stdscr.addstr(posx, posy, pstr)
+        culour_addstr(stdscr, posx, posy, pstr)
         if refresh: stdscr.refresh()
     else:
         print(*pargs, flush=True)
@@ -80,32 +81,58 @@ class GameConn(socketserver.BaseRequestHandler):
                 return (action // 200, action // 10 % 20, action % 10), v[1].item()
 
     def strat_text(self, strat, val=None):
-        ntxt = '{:8s}'.format(self.game.GetBoard().PlacementNotation(self.game.GetNowPiece(), *strat))
+        return '{:8s}'.format(self.game.GetBoard().PlacementNotation(self.game.GetNowPiece(), *strat))
         if val is not None:
-            ntxt += f'; val {val:6.3f}'
+            ntxt = f'val {val:6.3f} ' + ntxt
         return ntxt
 
-    def print_status(self, strats, is_table, data, refresh=True):
+    def print_status(self, nn_strats, table_strats, evals, conf, is_table, nn_time, table_ping, refresh=True):
         txt = 'Game #' + str(self.games) + '\n'
         txt += 'Games to 19: ' + str(self.num_19) + '\n'
         txt += 'Games to 29: ' + str(self.num_29) + '\n'
         txt += 'Drought: ' + str(self.drought) + '\nAgent: '
         txt += 'Tablebase' if is_table else 'Neural Net'
-        txt += '\nPlacements: (where to place\n the upcoming piece based on\n its next piece)\n'
-        for i in range(7):
-            txt += 'TJZOSLI'[i] + ': ' + self.strat_text(strats[i], None if is_table else data[i]) + '\n'
+        txt += '\nPlacements: (where to place the\n upcoming piece based on its\n next piece)\n'
         if is_table:
-            txt += f'confidence {data}'
+            txt += '            NN         | \033[0;33mTable\033[0m\n'
+        else:
+            txt += '            \033[0;33mNN\033[0m'
+            txt += '\n' if conf is None else '         | Table\n'
+        for i in range(7):
+            eval_txt = 'TJZOSLI'[i] + ': ' + f'val {evals[i]:6.3f} '
+            nn_txt = self.strat_text(nn_strats[i])
+            if conf is None:
+                nn_txt = '\033[0;33m' + nn_txt + '\033[0m'
+            else:
+                table_txt = self.strat_text(table_strats[i])
+                diff = table_strats[i] != nn_strats[i]
+                if diff:
+                    if is_table: nn_txt = '\033[0;31m' + nn_txt + '\033[0m'
+                    else: table_txt = '\033[0;31m' + table_txt + '\033[0m'
+                if is_table: table_txt = '\033[0;33m' + table_txt + '\033[0m'
+                else: nn_txt = '\033[0;33m' + nn_txt + '\033[0m'
+                nn_txt += ' | ' + table_txt
+            txt += eval_txt + nn_txt + '\n'
+        if conf is not None:
+            txt += f'confidence {conf}'
             if thresholds and is_perfect:
                 multiplier = (args.buckets - 2) / (args.ratio_high - args.ratio_low)
                 bias = 1 - args.ratio_low * multiplier
-                value_low = 0.0 if data == 0 else (data - bias) / multiplier
-                value_high = 1.0 if data == args.buckets - 1 else (data + 1 - bias) / multiplier
+                value_low = 0.0 if conf == 0 else (conf - bias) / multiplier
+                value_high = 1.0 if conf == args.buckets - 1 else (conf + 1 - bias) / multiplier
                 scale = thresholds[self.game.GetLines()] * 100
                 value_low *= scale
                 value_high *= scale
-                txt += f' (pure tablebase\n probability to 29:\n{value_low:6.2f}% -{value_high:6.2f}%)'
+                txt += f' (pure tablebase\n probability to 29:{value_low:6.2f}% -{value_high:6.2f}%)'
+            else:
+                txt += '\n'
+        else:
+            txt += '\n'
+        txt += f'\nNN eval time:   {int(nn_time * 1000):4d} ms'
+        if table_ping is not None:
+            txt += f'\nTablebase ping: {int(table_ping * 1000):4d} ms'
         txt += '\n'
+
         myprint(txt, refresh=refresh)
 
     def get_adj_strat(self, pos):
@@ -113,8 +140,7 @@ class GameConn(socketserver.BaseRequestHandler):
             pi, v = self.model(obs_to_torch(self.game.GetAdjStates(*pos)))
             actions = torch.argmax(pi, 1).flatten().cpu().tolist()
             strats = [(action // 200, action // 10 % 20, action % 10) for action in actions]
-            self.print_status(strats, False, v[1].flatten().cpu().tolist())
-            return strats
+            return strats, v[1].flatten().cpu().tolist()
 
     def print_status_noro(self, strat, v, refresh=True):
         if strat == (0, 0, 0): return
@@ -131,28 +157,44 @@ class GameConn(socketserver.BaseRequestHandler):
             self.game.GetBoard().GetBytes() +
             bytes([self.game.GetNowPiece(), lines % 256, lines // 256])
         )
+        self.tablebase_query_start = time.time()
         self.board_conn.sendall(query)
+
+    def recv_tablebase(self):
         result = self.board_conn.recv(22)
+        query_end = time.time()
         level = result[21]
         adj_strats = [tuple(result[i:i+3]) for i in range(0, 21, 3)]
-        self.print_status(adj_strats, True, level, refresh=False)
-        return adj_strats, level
+        if adj_strats[0] == (0, 0, 0): level = None
+        return adj_strats, level, query_end - self.tablebase_query_start
 
     def get_strat_all(self):
         if self.board_conn:
-            # tablebase
-            adj_strats, level = self.query_tablebase()
-            if not adj_strats[0] == (0, 0, 0):
-                if args.use_curses: stdscr.refresh()
-                if self.game.IsNoAdjMove(*adj_strats[0]):
-                    return False, adj_strats[0]
-                return True, adj_strats
+            self.query_tablebase()
         # beta
-        strat, v = self.get_strat()
-        if self.game.IsNoAdjMove(*strat):
-            self.print_status([strat]*7, False, [v]*7)
-            return False, strat
-        return True, self.get_adj_strat(strat)
+        is_table = False
+        nn_start_time = time.time()
+        nn_strat, v = self.get_strat()
+        if self.game.IsNoAdjMove(*nn_strat):
+            nn_strats, evals = [nn_strat] * 7, [v] * 7
+            nn_res = False, nn_strat
+        else:
+            nn_strats, evals = self.get_adj_strat(nn_strat)
+            nn_res = True, nn_strats
+        nn_time = time.time() - nn_start_time
+        # tablebase
+        table_strats, conf, table_ping = None, None, None
+        if self.board_conn:
+            # tablebase
+            table_strats, conf, table_ping = self.recv_tablebase()
+            if self.game.IsNoAdjMove(*table_strats[0]):
+                table_res = False, table_strats[0]
+            else:
+                table_res = True, table_strats
+            if conf is not None and conf >= args.tablebase_cutoff:
+                is_table = True
+        self.print_status(nn_strats, table_strats, evals, conf, is_table, nn_time, table_ping)
+        return table_res if is_table else nn_res
 
     def pad_seq(self, seq, fin):
         lvl = self.get_level()
@@ -416,6 +458,7 @@ if __name__ == "__main__":
         parser.add_argument('--ratio-low', type=float, default=0.01)
         parser.add_argument('--ratio-high', type=float, default=1.0)
         parser.add_argument('--buckets', type=float, default=256)
+        parser.add_argument('--tablebase-cutoff', type=int, default=0)
     args = parser.parse_args()
     print(args)
 
@@ -446,6 +489,7 @@ if __name__ == "__main__":
     if args.use_curses:
         stdscr = curses.initscr()
         curses.noecho()
+        curses.start_color()
         curses.curs_set(False)
 
     try:
