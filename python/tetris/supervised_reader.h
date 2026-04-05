@@ -1,5 +1,8 @@
 #pragma once
 
+#if __has_include(<zstd.h>)
+#define SUPERVISED_DATA_ENABLED
+
 #include <random>
 #include <algorithm>
 #include <unordered_set>
@@ -132,3 +135,11 @@ class PythonSupervisedDataReader {
 };
 
 extern PyTypeObject py_supervised_data_reader_class;
+
+#else
+#ifdef _MSC_VER
+#pragma message("<zstd.h> not found. You won't be able to run training with supervised data.")
+#else
+#warning "<zstd.h> not found. You won't be able to run training with supervised data."
+#endif
+#endif // __has_include(<zstd.h>)

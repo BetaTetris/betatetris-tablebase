@@ -351,7 +351,7 @@ class alignas(Align) BoardTmpl {
     }
   }
 
-  constexpr std::pair<int, Board> ClearLines(bool toprow_glitch = false) const {
+  constexpr std::pair<int, BoardTmpl> ClearLines(bool toprow_glitch = false) const {
     // top row tetris not implemented
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wnarrowing"
@@ -378,33 +378,33 @@ class alignas(Align) BoardTmpl {
   }
 
   // x = 1 or 2 for these 4 methods
-  constexpr Board ShiftLeft(int x) const {
+  constexpr BoardTmpl ShiftLeft(int x) const {
     return {b1 >> (x * 22) | b2 << (66 - x * 22),
             b2 >> (x * 22) | b3 << (66 - x * 22),
             b3 >> (x * 22) | b4 << (66 - x * 22),
             0};
   }
-  constexpr Board ShiftRight(int x) const {
+  constexpr BoardTmpl ShiftRight(int x) const {
     return {b1 << (x * 22),
             b2 << (x * 22) | b1 >> (66 - x * 22),
             b3 << (x * 22) | b2 >> (66 - x * 22),
             b3 >> (66 - x * 22) & kColumnMask};
   }
-  constexpr Board ShiftUpNoFilter(int x) const {
+  constexpr BoardTmpl ShiftUpNoFilter(int x) const {
     return {b1 >> x, b2 >> x, b3 >> x, b4 >> x};
   }
-  constexpr Board ShiftDownNoFilter(int x) const {
+  constexpr BoardTmpl ShiftDownNoFilter(int x) const {
     constexpr uint64_t kDownPadding = 0x100000400001;
     uint64_t padding = kDownPadding;
     if (x == 2) padding |= padding << 1;
     return {b1 << x | padding, b2 << x | padding, b3 << x | padding, b4 << x | padding};
   }
 
-  constexpr std::array<Board, 4> TMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board d = ShiftDownNoFilter(1);
-    Board l = ShiftLeft(1);
-    Board r = ShiftRight(1);
+  constexpr std::array<BoardTmpl, 4> TMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl d = ShiftDownNoFilter(1);
+    BoardTmpl l = ShiftLeft(1);
+    BoardTmpl r = ShiftRight(1);
     return {{
       u & l & r & *this,
       u & d & r & *this,
@@ -412,15 +412,15 @@ class alignas(Align) BoardTmpl {
       d & l & u & *this,
     }};
   }
-  constexpr std::array<Board, 4> JMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board d = ShiftDownNoFilter(1);
-    Board l = ShiftLeft(1);
-    Board r = ShiftRight(1);
-    Board ul = u.ShiftLeft(1);
-    Board ur = u.ShiftRight(1);
-    Board dl = d.ShiftLeft(1);
-    Board dr = d.ShiftRight(1);
+  constexpr std::array<BoardTmpl, 4> JMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl d = ShiftDownNoFilter(1);
+    BoardTmpl l = ShiftLeft(1);
+    BoardTmpl r = ShiftRight(1);
+    BoardTmpl ul = u.ShiftLeft(1);
+    BoardTmpl ur = u.ShiftRight(1);
+    BoardTmpl dl = d.ShiftLeft(1);
+    BoardTmpl dr = d.ShiftRight(1);
     return {{
       ul & l & r & *this,
       ur & u & d & *this,
@@ -428,44 +428,43 @@ class alignas(Align) BoardTmpl {
       dl & u & d & *this,
     }};
   }
-  constexpr std::array<Board, 2> ZMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board l = ShiftLeft(1);
-    Board r = ShiftRight(1);
-    Board ul = u.ShiftLeft(1);
-    Board dl = l.ShiftDownNoFilter(1);
+  constexpr std::array<BoardTmpl, 2> ZMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl l = ShiftLeft(1);
+    BoardTmpl r = ShiftRight(1);
+    BoardTmpl ul = u.ShiftLeft(1);
+    BoardTmpl dl = l.ShiftDownNoFilter(1);
     return {{
       u & r & ul & *this,
       u & l & dl & *this,
     }};
   }
-  constexpr std::array<Board, 1> OMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board r = ShiftRight(1);
-    Board ur = u.ShiftRight(1);
+  constexpr std::array<BoardTmpl, 1> OMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl r = ShiftRight(1);
+    BoardTmpl ur = u.ShiftRight(1);
     return {{u & r & ur & *this}};
   }
-  constexpr std::array<Board, 2> SMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board d = ShiftDownNoFilter(1);
-    Board l = ShiftLeft(1);
-    //Board r = ShiftRight(1);
-    Board ur = u.ShiftRight(1);
-    Board ul = u.ShiftLeft(1);
+  constexpr std::array<BoardTmpl, 2> SMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl d = ShiftDownNoFilter(1);
+    BoardTmpl l = ShiftLeft(1);
+    BoardTmpl ur = u.ShiftRight(1);
+    BoardTmpl ul = u.ShiftLeft(1);
     return {{
       u & l & ur & *this,
       d & l & ul & *this,
     }};
   }
-  constexpr std::array<Board, 4> LMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board d = ShiftDownNoFilter(1);
-    Board l = ShiftLeft(1);
-    Board r = ShiftRight(1);
-    Board ul = u.ShiftLeft(1);
-    Board ur = u.ShiftRight(1);
-    Board dl = d.ShiftLeft(1);
-    Board dr = d.ShiftRight(1);
+  constexpr std::array<BoardTmpl, 4> LMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl d = ShiftDownNoFilter(1);
+    BoardTmpl l = ShiftLeft(1);
+    BoardTmpl r = ShiftRight(1);
+    BoardTmpl ul = u.ShiftLeft(1);
+    BoardTmpl ur = u.ShiftRight(1);
+    BoardTmpl dl = d.ShiftLeft(1);
+    BoardTmpl dr = d.ShiftRight(1);
     return {{
       ur & l & r & *this,
       dr & u & d & *this,
@@ -473,13 +472,13 @@ class alignas(Align) BoardTmpl {
       ul & u & d & *this,
     }};
   }
-  constexpr std::array<Board, 2> IMap() const {
-    Board u = ShiftUpNoFilter(1);
-    Board d = ShiftDownNoFilter(1);
-    Board d2 = ShiftDownNoFilter(2);
-    Board l = ShiftLeft(1);
-    Board r = ShiftRight(1);
-    Board r2 = ShiftRight(2);
+  constexpr std::array<BoardTmpl, 2> IMap() const {
+    BoardTmpl u = ShiftUpNoFilter(1);
+    BoardTmpl d = ShiftDownNoFilter(1);
+    BoardTmpl d2 = ShiftDownNoFilter(2);
+    BoardTmpl l = ShiftLeft(1);
+    BoardTmpl r = ShiftRight(1);
+    BoardTmpl r2 = ShiftRight(2);
     return {{
       l & r & r2 & *this,
       u & d & d2 & *this,
@@ -500,7 +499,7 @@ class alignas(Align) BoardTmpl {
     unreachable();
   }
 
-  template <int piece> constexpr std::array<Board, NumRotations(piece)> PieceMap() const {
+  template <int piece> constexpr std::array<BoardTmpl, NumRotations(piece)> PieceMap() const {
     if constexpr (piece == 0) return TMap();
     if constexpr (piece == 1) return JMap();
     if constexpr (piece == 2) return ZMap();
@@ -511,9 +510,9 @@ class alignas(Align) BoardTmpl {
     unreachable();
   }
 
-  std::vector<Board> PieceMap(int piece) const {
+  std::vector<BoardTmpl> PieceMap(int piece) const {
     switch (piece) {
-#define ONECASE(x) case x: { auto b = PieceMap<x>(); return std::vector<Board>(b.begin(), b.end()); }
+#define ONECASE(x) case x: { auto b = PieceMap<x>(); return std::vector<BoardTmpl>(b.begin(), b.end()); }
       ONECASE(0)
       ONECASE(1)
       ONECASE(2)
@@ -526,7 +525,7 @@ class alignas(Align) BoardTmpl {
     unreachable();
   }
 
-  template <int piece> constexpr Board PieceMapNoro() const {
+  template <int piece> constexpr BoardTmpl PieceMapNoro() const {
     if constexpr (piece == 0) return TMap()[0];
     if constexpr (piece == 1) return JMap()[0];
     if constexpr (piece == 2) return ZMap()[0];
@@ -537,7 +536,7 @@ class alignas(Align) BoardTmpl {
     unreachable();
   }
 
-  constexpr Board PieceMapNoro(int piece) const {
+  constexpr BoardTmpl PieceMapNoro(int piece) const {
     switch (piece) {
 #define ONECASE(x) case x: return PieceMapNoro<x>();
       ONECASE(0)
@@ -552,7 +551,7 @@ class alignas(Align) BoardTmpl {
     unreachable();
   }
 
-  constexpr Board PlaceT(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceT(int r, int x, int y) const {
     switch (r) {
       case 0: return Place3Wide_(kTPiece0_, x, y, 0, 1);
       case 1: return Place2Wide_(kTPiece1_, x, y, 1, 1);
@@ -561,7 +560,7 @@ class alignas(Align) BoardTmpl {
     }
     unreachable();
   }
-  constexpr Board PlaceJ(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceJ(int r, int x, int y) const {
     switch (r) {
       case 0: return Place3Wide_(kJPiece0_, x, y, 0, 1);
       case 1: return Place2Wide_(kJPiece1_, x, y, 1, 1);
@@ -570,24 +569,24 @@ class alignas(Align) BoardTmpl {
     }
     unreachable();
   }
-  constexpr Board PlaceZ(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceZ(int r, int x, int y) const {
     switch (r) {
       case 0: return Place3Wide_(kZPiece0_, x, y, 0, 1);
       case 1: return Place2Wide_(kZPiece1_, x, y, 1, 0);
     }
     unreachable();
   }
-  constexpr Board PlaceO(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceO(int r, int x, int y) const {
     return Place2Wide_(kOPiece_, x, y, 0, 1);
   }
-  constexpr Board PlaceS(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceS(int r, int x, int y) const {
     switch (r) {
       case 0: return Place3Wide_(kSPiece0_, x, y, 0, 1);
       case 1: return Place2Wide_(kSPiece1_, x, y, 1, 0);
     }
     unreachable();
   }
-  constexpr Board PlaceL(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceL(int r, int x, int y) const {
     switch (r) {
       case 0: return Place3Wide_(kLPiece0_, x, y, 0, 1);
       case 1: return Place2Wide_(kLPiece1_, x, y, 1, 1);
@@ -596,7 +595,7 @@ class alignas(Align) BoardTmpl {
     }
     unreachable();
   }
-  constexpr Board PlaceI(int r, int x, int y) const {
+  constexpr BoardTmpl PlaceI(int r, int x, int y) const {
     switch (r) {
       case 0: return PlaceI0_(x, y);
       case 1: return Place1Wide_(kIPiece1_, x, y, 2);
@@ -604,7 +603,7 @@ class alignas(Align) BoardTmpl {
     unreachable();
   }
 
-  constexpr Board Place(int piece, int r, int x, int y) const {
+  constexpr BoardTmpl Place(int piece, int r, int x, int y) const {
     switch (piece) {
       case 0: return PlaceT(r, x, y);
       case 1: return PlaceJ(r, x, y);
@@ -641,23 +640,23 @@ class alignas(Align) BoardTmpl {
 
   constexpr bool operator==(const BoardTmpl<Align>& x) const = default;
   constexpr bool operator!=(const BoardTmpl<Align>& x) const = default;
-  constexpr BoardTmpl<Align>& operator|=(const Board& x) {
+  constexpr BoardTmpl<Align>& operator|=(const BoardTmpl& x) {
     b1 |= x.b1; b2 |= x.b2; b3 |= x.b3; b4 |= x.b4;
     return *this;
   }
-  constexpr BoardTmpl<Align>& operator&=(const Board& x) {
+  constexpr BoardTmpl<Align>& operator&=(const BoardTmpl& x) {
     b1 &= x.b1; b2 &= x.b2; b3 &= x.b3; b4 &= x.b4;
     return *this;
   }
 
-  constexpr Board operator~() const {
-    Board r = {~b1, ~b2, ~b3, ~b4};
+  constexpr BoardTmpl operator~() const {
+    BoardTmpl r = {~b1, ~b2, ~b3, ~b4};
     r.Normalize();
     return r;
   }
 
   std::string ToString(bool invert = false, bool compact = true, bool row_numbers = true) const {
-    Board obj = invert ? ~*this : (Board)*this;
+    BoardTmpl obj = invert ? ~*this : (BoardTmpl)*this;
     uint64_t p = obj.b1 & obj.b2 & obj.b3 & (obj.b4 | ~(uint64_t)kColumnMask);
     uint32_t rows = ~(p & p >> 22 & p >> 44) & kColumnMask;
     int first_row = rows == 0 ? 20 : ctz(rows);
@@ -705,12 +704,12 @@ class alignas(Align) BoardTmpl {
     return ret;
   }
 
-  static const Board Zeros;
-  static const Board Ones;
+  static const BoardTmpl Zeros;
+  static const BoardTmpl Ones;
 };
 
-template <size_t Align> inline constexpr Board BoardTmpl<Align>::Zeros = Board(0, 0, 0, 0);
-template <size_t Align> inline constexpr Board BoardTmpl<Align>::Ones = ~Board(0, 0, 0, 0);
+template <size_t Align> inline constexpr BoardTmpl<Align> BoardTmpl<Align>::Zeros = BoardTmpl<Align>(0, 0, 0, 0);
+template <size_t Align> inline constexpr BoardTmpl<Align> BoardTmpl<Align>::Ones = ~BoardTmpl<Align>(0, 0, 0, 0);
 
 constexpr Board operator|(const Board& x, const Board& y) {
   return {x.b1 | y.b1, x.b2 | y.b2, x.b3 | y.b3, x.b4 | y.b4};

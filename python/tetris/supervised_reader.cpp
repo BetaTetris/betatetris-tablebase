@@ -1,5 +1,7 @@
 #include "supervised_reader.h"
 
+#ifdef SUPERVISED_DATA_ENABLED
+
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define NO_IMPORT_ARRAY
 #define PY_ARRAY_UNIQUE_SYMBOL TETRIS_PY_ARRAY_SYMBOL_
@@ -102,3 +104,5 @@ PyTypeObject py_supervised_data_reader_class = {
     0,                       // tp_alloc
     SupervisedDataReaderNew, // tp_new
 };
+
+#endif // defined(SUPERVISED_DATA_ENABLED)

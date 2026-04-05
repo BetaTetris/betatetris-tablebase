@@ -60,9 +60,9 @@ inline size_t SimpleVecInput(std::vector<T>& vec, const uint8_t data[], size_t b
 
 template <class T, size_t sz>
 struct SimpleIOArray : public std::array<T, sz> {
-  using std::array<T, sz>::array;
   using std::array<T, sz>::data;
 
+  constexpr SimpleIOArray() : std::array<T, sz>{} {}
   SimpleIOArray(const uint8_t buf[], size_t) {
     memcpy(data(), buf, NumBytes());
   }

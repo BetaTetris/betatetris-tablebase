@@ -1,5 +1,7 @@
 #include "frame_sequence.h"
 
+#include <iterator>
+
 namespace move_search {
 
 template <int R>
