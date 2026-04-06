@@ -29,7 +29,12 @@ PyMODINIT_FUNC PyInit_tetris() {
   PyObject *m = PyModule_Create(&py_tetris_module);
   if (m == nullptr) return nullptr;
 
+#ifdef SUPERVISED_DATA_ENABLED
   PyObject *all = Py_BuildValue("[s,s,s]", "Tetris", "Board", "SupervisedDataReader");
+#else
+  PyObject *all = Py_BuildValue("[s,s]", "Tetris", "Board");
+#endif
+
   Py_INCREF(&py_tetris_class);
   Py_INCREF(&py_board_class);
 #ifdef SUPERVISED_DATA_ENABLED
