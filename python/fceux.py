@@ -15,6 +15,24 @@ thresholds = None
 is_noro = tetris.Tetris.IsNoro()
 is_perfect = tetris.Tetris.IsTetrisOnly()
 
+FRAMES_PER_ROW = [
+    48, 43, 38, 33, 28, 23, 18, 13, 8, 6, # 0-9
+    5, 5, 5, 4, 4, 4, 3, 3, 3, 2, # 10-19
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 1, # 20-29
+]
+
+
+def build_level_table(start_level):
+    def should_level_up(level, lines10):
+        return (level - lines10 % 10 - 16 * (lines10 // 10)) % 256 >= 128
+
+    ret = []
+    lvl = start_level
+    for i in range(1760 + 80): # at most 800 lines to enter cycle
+        ret.append(lvl)
+        if should_level_up(lvl, i + 1): lvl = (lvl + 1) % 256
+    return ret
+
 
 def myprint(*pargs, posx=0, posy=0, clear=True, refresh=True):
     if args.use_curses:
@@ -136,7 +154,34 @@ class GameConn(socketserver.BaseRequestHandler):
             return False, strat
         return True, self.get_adj_strat(strat)
 
-    def send_seq(self, seq):
+    def pad_seq(self, seq, fin):
+        lvl = self.get_level()
+        if lvl >= 29: return seq
+        lines = self.game.GetLines()
+        if lines < 130:
+            frames_orig = 3
+        elif lines < 230:
+            frames_orig = 2
+        else:
+            frames_orig = 1
+        orig_2ks = lines >= 330 and not args.no_2ks
+        frames_new = FRAMES_PER_ROW[lvl] * (2 if orig_2ks else 1)
+        to_pad = frames_new - frames_orig
+        if to_pad <= 0: return seq
+        new_seq = []
+        for i, x in enumerate(seq):
+            new_seq.append(x)
+            if (i + 1) % frames_orig == 0:
+                if to_pad <= 3: new_seq += [0] * to_pad
+                else: new_seq += [16] * (5 if orig_2ks else 3)
+        if fin:
+            new_seq += [16] * 41
+        return np.array(new_seq, dtype='uint8')
+
+    def send_seq(self, seq, fin=False):
+        lvl = self.get_level()
+        if args.no_cap or lvl < 18:
+            seq = self.pad_seq(seq, fin)
         self.request.send(self.gen_seq(seq))
 
     def step_game(self, strat):
@@ -158,7 +203,7 @@ class GameConn(socketserver.BaseRequestHandler):
         else:
             seq = self.game.GetSequence(*strat)
             self.prev = (strat, None, None)
-            self.send_seq(seq)
+            self.send_seq(seq, True)
             self.send_seq([])
 
     def finish_move(self, next_piece):
@@ -173,7 +218,7 @@ class GameConn(socketserver.BaseRequestHandler):
         else:
             strat = strats[next_piece]
             fin_seq = self.game.FinishAdjSequence(seq, pos, strat)
-            self.send_seq(fin_seq[len(seq):])
+            self.send_seq(fin_seq[len(seq):], True)
             self.step_game(strat)
             self.prev_placement = strat
 
@@ -235,13 +280,25 @@ class GameConn(socketserver.BaseRequestHandler):
     def start_lines(self):
         if self.start_level <= 18: return 0
         if self.start_level <= 28: return 130
-        if self.start_level <= 38: return 230
+        if self.start_level <= 38 or args.no_2ks: return 230
         return 330
+
+    def get_level(self):
+        lines10 = self.game.GetRunLines() // 10
+        if lines10 >= len(self.level_table):
+            lines10 -= 1760 * ((lines10 - len(self.level_table)) // 1760 + 1)
+        return self.level_table[lines10]
 
     def set_effective_lines(self):
         if is_noro: return
         lines = self.game.GetRunLines()
-        if self.start_level <= 18:
+        if self.start_level < 15:
+            extra_lines = min(6, 15 - self.start_level) * 10
+            if 32 <= lines < 32 + extra_lines:
+                lines = 32 + (lines % 4)
+            elif lines >= 32 + extra_lines:
+                lines -= extra_lines  # may alter parity on perfect play
+        elif self.start_level <= 18:
             pass
         elif self.start_level <= 28:
             if lines < 148: lines = 144 + (lines % 4)
@@ -269,6 +326,7 @@ class GameConn(socketserver.BaseRequestHandler):
                         self.games = 0
                     self.done = False
                     cur, nxt, self.start_level = self.read_until(3)
+                    self.level_table = build_level_table(self.start_level)
                     if is_noro:
                         use_mirror = [
                             [0, 1, 1, 0, 0, 0, 0],
