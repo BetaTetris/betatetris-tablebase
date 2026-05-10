@@ -151,6 +151,7 @@ PyObject* Tetris_SetLines(PythonTetris* self, PyObject* args, PyObject* kwds) {
     self->tetris.SetLines(lines);
     Py_RETURN_NONE;
   } catch (std::range_error& e) {
+    PyErr_SetString(PyExc_ValueError, e.what());
     return nullptr;
   }
 }
